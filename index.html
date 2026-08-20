@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LiftTrack — simple workout, nutrition and strength tracking.">
+  <title>LiftTrack | Train with intent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="LiftTrack home"><span>LT</span> LiftTrack</a>
+      <nav class="nav" aria-label="Main navigation">
+        <button class="nav-link active" data-view="dashboard"><span>⌂</span> Dashboard</button>
+        <button class="nav-link" data-view="workout"><span>＋</span> Workout</button>
+        <button class="nav-link" data-view="nutrition"><span>◒</span> Nutrition</button>
+        <button class="nav-link" data-view="plans"><span>☷</span> Plans</button>
+        <button class="nav-link" data-view="analytics"><span>↗</span> Analytics</button>
+        <button class="nav-link" data-view="guide"><span>◎</span> Form guide</button>
+      </nav>
+      <div class="sidebar-note"><span class="pulse-dot"></span><div><strong>Local mode</strong><small>Your data stays on this device.</small></div></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Open menu">☰</button>
+        <div><p class="eyebrow" id="todayLabel"></p><h1 id="pageTitle">Dashboard</h1></div>
+        <div class="avatar" aria-hidden="true">LT</div>
+      </header>
+
+      <section class="view active" id="dashboardView">
+        <div class="hero-card">
+          <div><p class="eyebrow light">READY WHEN YOU ARE</p><h2 id="greeting">Good morning.</h2><p>Small improvements stack up. Log today’s work and keep moving forward.</p></div>
+          <button class="btn btn-light" id="dashboardStart">Start workout <span>→</span></button>
+          <div class="hero-orb"></div>
+        </div>
+        <div class="metric-grid">
+          <article class="metric-card"><div class="metric-icon">↗</div><p>Workout status</p><strong id="dashWorkoutStatus">Not started</strong><small id="dashWorkoutDetail">Ready for your next session</small></article>
+          <article class="metric-card"><div class="metric-icon">◒</div><p>Protein today</p><strong><span id="dashProtein">0</span><em> / 160g</em></strong><div class="mini-track"><span id="dashProteinBar"></span></div></article>
+          <article class="metric-card"><div class="metric-icon">◆</div><p>Best estimated 1RM</p><strong id="dashBest1rm">—</strong><small id="dashBestExercise">Log sets to establish a best</small></article>
+        </div>
+        <div class="split-grid">
+          <article class="panel"><div class="panel-head"><div><p class="eyebrow">RECENT ACTIVITY</p><h3>Last workout</h3></div><button class="text-btn" data-go="workout">View history →</button></div><div id="lastWorkout" class="empty-state">No completed workouts yet. Your first session will appear here.</div></article>
+          <article class="panel accent-panel"><p class="eyebrow">THIS WEEK</p><h3>Build the habit.</h3><p>Consistency beats intensity. Keep your training history alive with one focused session.</p><button class="btn btn-dark" data-go="plans">Choose a plan</button></article>
+        </div>
+      </section>
+
+      <section class="view" id="workoutView">
+        <div class="section-intro"><div><p class="eyebrow">SESSION LOG</p><h2 id="workoutHeading">Today’s workout</h2><p id="workoutStarted">Add your first working set to begin.</p></div><button class="btn btn-dark" id="finishWorkout">Finish workout</button></div>
+        <article class="panel form-panel">
+          <div class="exercise-picker"><label for="exerciseSelect">Exercise</label><div class="input-with-action"><select id="exerciseSelect"></select><button id="toggleFavourite" class="star-btn" aria-label="Toggle favourite">☆</button></div><div id="favouriteChips" class="chips"></div></div>
+          <div class="set-entry"><label>Weight (kg)<input type="number" id="weightInput" min="0" step="0.5" placeholder="80"></label><label>Reps<input type="number" id="repsInput" min="1" step="1" placeholder="8"></label><button class="btn btn-primary" id="addSet">Add set</button></div>
+        </article>
+        <div class="workout-summary"><div><span>Total sets</span><strong id="currentSets">0</strong></div><div><span>Volume</span><strong id="currentVolume">0 kg</strong></div><div><span>Best est. 1RM</span><strong id="current1rm">—</strong></div></div>
+        <article class="panel"><div class="panel-head"><h3>Current sets</h3><span class="status-pill" id="sessionPill">Waiting</span></div><div id="currentSetList" class="set-list empty-state">No sets logged yet.</div></article>
+        <article class="panel"><div class="panel-head"><div><p class="eyebrow">ARCHIVE</p><h3>Workout history</h3></div></div><div id="historyList" class="history-list empty-state">Completed workouts will be saved here.</div></article>
+      </section>
+
+      <section class="view" id="nutritionView">
+        <div class="section-intro"><div><p class="eyebrow">DAILY FUEL</p><h2>Protein tracker</h2><p>Fuel recovery one meal at a time.</p></div></div>
+        <div class="nutrition-layout">
+          <article class="protein-card"><div class="protein-ring" id="proteinRing"><div><strong id="proteinTotal">0g</strong><span>of 160g</span></div></div><h3>Daily protein</h3><p id="proteinMessage">Add food to start tracking.</p></article>
+          <article class="panel form-panel"><h3>Add food</h3><div class="nutrition-form"><label>Food name<input id="foodName" type="text" placeholder="Greek yoghurt"></label><label>Protein / serving (g)<input id="foodProtein" type="number" min="0.1" step="0.1" placeholder="20"></label><label>Quantity<input id="foodQuantity" type="number" min="0.1" step="0.1" value="1"></label><button class="btn btn-primary" id="addFood">Add food</button></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><h3>Today’s foods</h3><span id="foodCount" class="status-pill">0 items</span></div><div id="foodList" class="food-list empty-state">No foods logged today.</div></article>
+      </section>
+
+      <section class="view" id="plansView">
+        <div class="section-intro"><div><p class="eyebrow">PROGRAMMING</p><h2>Workout plans</h2><p>Build repeatable sessions that remove the guesswork.</p></div></div>
+        <div class="plans-layout">
+          <article class="panel form-panel"><h3 id="planFormTitle">Create a plan</h3><label>Plan name<input id="planName" type="text" placeholder="Upper strength"></label><label>Exercises <small>One per line</small><textarea id="planExercises" rows="7" placeholder="Bench Press&#10;Barbell Row&#10;Overhead Press"></textarea></label><div class="button-row"><button class="btn btn-primary" id="savePlan">Save plan</button><button class="btn btn-ghost hidden" id="cancelPlanEdit">Cancel edit</button></div></article>
+          <div id="plansList" class="plan-grid empty-state">No plans saved yet.</div>
+        </div>
+      </section>
+
+      <section class="view" id="analyticsView">
+        <div class="section-intro"><div><p class="eyebrow">PROGRESS</p><h2>Training analytics</h2><p>Your work, translated into momentum.</p></div></div>
+        <div class="metric-grid four"><article class="metric-card"><p>Total workouts</p><strong id="analyticsWorkouts">0</strong></article><article class="metric-card"><p>Total sets</p><strong id="analyticsSets">0</strong></article><article class="metric-card"><p>Lifetime volume</p><strong id="analyticsVolume">0 kg</strong></article><article class="metric-card"><p>Best est. 1RM</p><strong id="analytics1rm">—</strong></article></div>
+        <div class="split-grid analytics-grid"><article class="panel"><div class="panel-head"><div><p class="eyebrow">LAST 7 WORKOUTS</p><h3>Recent volume</h3></div></div><div id="volumeChart" class="chart empty-state">Finish a workout to see your volume trend.</div></article><article class="panel"><div class="panel-head"><div><p class="eyebrow">BY MOVEMENT</p><h3>Exercise performance</h3></div></div><div id="exerciseStats" class="stats-list empty-state">Exercise insights will appear here.</div></article></div>
+      </section>
+
+      <section class="view" id="guideView">
+        <div class="section-intro"><div><p class="eyebrow">MOVE BETTER</p><h2>Exercise form guide</h2><p>Simple cues for strong, repeatable technique.</p></div><label class="guide-select">Choose exercise<select id="guideExercise"></select></label></div>
+        <div class="guide-grid"><article class="panel guide-card"><span class="step-number">01</span><h3>Setup</h3><ul id="setupCues"></ul></article><article class="panel guide-card"><span class="step-number">02</span><h3>Execution</h3><ul id="executionCues"></ul></article><article class="panel guide-card warning"><span class="step-number">!</span><h3>Common mistakes</h3><ul id="mistakeCues"></ul></article></div>
+        <article class="video-placeholder"><div class="play-icon">▶</div><div><span class="coming-soon">COMING SOON</span><h3>AI form video analysis</h3><p>Upload a set and receive personalized movement feedback.</p></div></article>
+      </section>
+    </main>
+  </div>
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+  <div id="confirmModal" class="modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal-icon">!</div><h3 id="confirmTitle">Are you sure?</h3><p id="confirmMessage"></p><div class="button-row"><button class="btn btn-ghost" id="confirmCancel">Cancel</button><button class="btn btn-danger" id="confirmOkay">Delete</button></div></div></div>
+  <script src="script.js"></script>
+</body>
+</html>
