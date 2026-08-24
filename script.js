@@ -22,7 +22,8 @@ let currentWorkout = load(KEYS.current, { startedAt: null, planName: "", planned
 const localWorkoutHistory = load(KEYS.history, []);
 let workoutHistory = localWorkoutHistory;
 let authenticatedUser = null;
-let foods = load(KEYS.foods, []).filter(item => item.date === dateKey());
+const localFoods = load(KEYS.foods, []).filter(item => item.date === dateKey());
+let foods = localFoods;
 let plans = load(KEYS.plans, []);
 let favourites = load(KEYS.favourites, []);
 let editingPlanId = null;
@@ -51,6 +52,16 @@ function ensureWorkoutLoggerAvailable() {
   });
 }
 
+function ensureNutritionTrackerAvailable() {
+  const nutritionView = document.querySelector("#nutritionView");
+  nutritionView.classList.remove("hidden");
+  nutritionView.removeAttribute("aria-hidden");
+  nutritionView.style.removeProperty("display");
+  ["foodName", "foodProtein", "foodQuantity", "addFood"].forEach(id => {
+    document.querySelector(`#${id}`).disabled = false;
+  });
+}
+
 function renderHistoryViews() {
   renderDashboard();
   renderWorkout();
@@ -63,14 +74,20 @@ function updateAuthUI(user) {
   document.querySelector("#authStatus").classList.toggle("live", !!user);
   document.querySelector("#signOut").disabled = !user;
   ensureWorkoutLoggerAvailable();
+  ensureNutritionTrackerAvailable();
   if (user) {
     workoutHistory = localWorkoutHistory;
+    foods = localFoods;
     renderHistoryViews();
+    renderNutrition();
     loadSupabaseWorkoutHistory();
+    loadSupabaseNutrition();
   }
   else {
     workoutHistory = localWorkoutHistory;
+    foods = localFoods;
     renderHistoryViews();
+    renderNutrition();
   }
 }
 
@@ -129,6 +146,24 @@ async function loadSupabaseWorkoutHistory({ quiet = false } = {}) {
   return true;
 }
 
+async function loadSupabaseNutrition({ quiet = false } = {}) {
+  if (!authenticatedUser || !requireSupabaseConfig()) return false;
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfDay);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  // Date bounds preserve the existing daily tracker; RLS enforces user ownership.
+  const { data, error } = await supabaseClient.from("nutrition_logs").select("id, food_name, protein, quantity, logged_at").gte("logged_at", startOfDay.toISOString()).lt("logged_at", startOfTomorrow.toISOString()).order("logged_at", { ascending: false });
+  if (error) {
+    if (!quiet) showToast(`Could not load nutrition data: ${error.message}`, "error");
+    return false;
+  }
+  foods = data.map(row => ({ id: row.id, name: row.food_name, protein: Number(row.protein), quantity: Number(row.quantity), loggedAt: row.logged_at, source: "supabase" }));
+  renderNutrition();
+  renderDashboard();
+  return true;
+}
+
 function initializeSupabase() {
   if (!hasSupabaseConfig()) return updateAuthUI(null);
   supabaseClient.auth.getSession().then(({ data }) => updateAuthUI(data.session?.user ?? null));
@@ -137,7 +172,7 @@ function initializeSupabase() {
 function askConfirmation(message, action, label = "Delete") { confirmAction = action; document.querySelector("#confirmMessage").textContent = message; document.querySelector("#confirmOkay").textContent = label; document.querySelector("#confirmModal").classList.add("open"); document.querySelector("#confirmModal").setAttribute("aria-hidden", "false"); }
 function closeConfirmation() { confirmAction = null; document.querySelector("#confirmModal").classList.remove("open"); document.querySelector("#confirmModal").setAttribute("aria-hidden", "true"); }
 
-function showView(name) { if (name === "workout") ensureWorkoutLoggerAvailable(); document.querySelectorAll(".view").forEach(view => view.classList.remove("active")); document.querySelector(`#${name}View`).classList.add("active"); document.querySelectorAll(".nav-link").forEach(link => link.classList.toggle("active", link.dataset.view === name)); document.querySelector("#pageTitle").textContent = ({ dashboard: "Dashboard", workout: "Workout logger", nutrition: "Nutrition", plans: "Workout plans", analytics: "Analytics", guide: "Form guide" })[name]; document.querySelector(".sidebar").classList.remove("open"); window.scrollTo({ top: 0, behavior: "smooth" }); if (name === "analytics") renderAnalytics(); }
+function showView(name) { if (name === "workout") ensureWorkoutLoggerAvailable(); if (name === "nutrition") ensureNutritionTrackerAvailable(); document.querySelectorAll(".view").forEach(view => view.classList.remove("active")); document.querySelector(`#${name}View`).classList.add("active"); document.querySelectorAll(".nav-link").forEach(link => link.classList.toggle("active", link.dataset.view === name)); document.querySelector("#pageTitle").textContent = ({ dashboard: "Dashboard", workout: "Workout logger", nutrition: "Nutrition", plans: "Workout plans", analytics: "Analytics", guide: "Form guide" })[name]; document.querySelector(".sidebar").classList.remove("open"); window.scrollTo({ top: 0, behavior: "smooth" }); if (name === "analytics") renderAnalytics(); }
 
 function initializeSelectors() { const options = exercises.map(name => `<option>${name}</option>`).join(""); document.querySelector("#exerciseSelect").innerHTML = options; document.querySelector("#guideExercise").innerHTML = options; }
 function renderAll() { renderDashboard(); renderWorkout(); renderNutrition(); renderPlans(); renderFavourites(); renderAnalytics(); renderGuide(); }
@@ -235,7 +270,50 @@ function finishWorkout() {
 }
 function renderWorkout() { const sets = currentWorkout.sets; document.querySelector("#workoutHeading").textContent = currentWorkout.planName || "Today’s workout"; document.querySelector("#workoutStarted").textContent = currentWorkout.startedAt ? `Started ${new Date(currentWorkout.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Add your first working set to begin."; document.querySelector("#currentSets").textContent = sets.length; document.querySelector("#currentVolume").textContent = `${formatNumber(volumeOf(sets))} kg`; const best = Math.max(0, ...sets.map(set => epley(set.weight, set.reps))); document.querySelector("#current1rm").textContent = best ? `${formatNumber(best)} kg` : "—"; document.querySelector("#sessionPill").textContent = sets.length ? "In progress" : "Waiting"; document.querySelector("#sessionPill").classList.toggle("live", !!sets.length); const list = document.querySelector("#currentSetList"); list.classList.toggle("empty-state", !sets.length); list.innerHTML = sets.length ? sets.map((set, index) => `<div class="set-row"><span class="set-number">${index + 1}</span><div><strong>${escapeHTML(set.exercise)}</strong><small>Exercise</small></div><div><strong>${set.weight} kg</strong><small>Weight</small></div><div><strong>${set.reps}</strong><small>Reps</small></div><div><strong>${formatNumber(epley(set.weight, set.reps))} kg</strong><small>Est. 1RM</small></div><button class="icon-btn" data-delete-set="${set.id}" aria-label="Delete set">×</button></div>`).join("") : "No sets logged yet."; const history = document.querySelector("#historyList"); history.classList.toggle("empty-state", !workoutHistory.length); history.innerHTML = workoutHistory.length ? workoutHistory.map(workout => `<div class="history-card"><div><strong>${escapeHTML(workout.name)}</strong><small>${formatDate(workout.finishedAt)}</small></div><div><strong>${workout.sets.length}</strong><small>sets</small></div><div><strong>${formatNumber(workoutVolume(workout))} kg</strong><small>volume</small></div><div><strong>${new Set(workout.sets.map(set => set.exercise)).size}</strong><small>exercises</small></div><button class="icon-btn" data-delete-workout="${workout.id}" aria-label="Delete workout">×</button></div>`).join("") : "Completed workouts will be saved here."; }
 
-function addFood() { const name = document.querySelector("#foodName").value.trim(); const protein = Number(document.querySelector("#foodProtein").value); const quantity = Number(document.querySelector("#foodQuantity").value); if (!name || protein <= 0 || quantity <= 0) return showToast("Complete all food fields with positive values.", "error"); foods.push({ id: uid(), name, protein, quantity, date: dateKey() }); save(KEYS.foods, foods); document.querySelector("#foodName").value = ""; document.querySelector("#foodProtein").value = ""; document.querySelector("#foodQuantity").value = "1"; renderNutrition(); renderDashboard(); showToast("Food added"); }
+function clearFoodInputs() { document.querySelector("#foodName").value = ""; document.querySelector("#foodProtein").value = ""; document.querySelector("#foodQuantity").value = "1"; }
+async function addFood() {
+  const name = document.querySelector("#foodName").value.trim();
+  const protein = Number(document.querySelector("#foodProtein").value);
+  const quantity = Number(document.querySelector("#foodQuantity").value);
+  if (!name || protein <= 0 || quantity <= 0) return showToast("Complete all food fields with positive values.", "error");
+  if (authenticatedUser && hasSupabaseConfig()) {
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) return showToast(userError?.message || "Your session expired. Sign in again before adding food.", "error");
+    const { error } = await supabaseClient.from("nutrition_logs").insert({ user_id: user.id, food_name: name, protein, quantity });
+    if (error) return showToast(`Food was not saved: ${error.message}`, "error");
+    clearFoodInputs();
+    const refreshed = await loadSupabaseNutrition({ quiet: true });
+    showToast(refreshed ? "Food added to Supabase." : "Food was saved, but nutrition data could not be refreshed.", refreshed ? "success" : "error");
+    return;
+  }
+  localFoods.push({ id: uid(), name, protein, quantity, date: dateKey() });
+  foods = localFoods;
+  save(KEYS.foods, localFoods);
+  clearFoodInputs();
+  renderNutrition();
+  renderDashboard();
+  showToast("Food added");
+}
+
+async function deleteFood(id) {
+  if (authenticatedUser && hasSupabaseConfig()) {
+    const { error } = await supabaseClient.from("nutrition_logs").delete().eq("id", id);
+    if (error) return showToast(`Food could not be deleted: ${error.message}`, "error");
+    const refreshed = await loadSupabaseNutrition({ quiet: true });
+    if (!refreshed) foods = foods.filter(item => item.id !== id);
+    renderNutrition();
+    renderDashboard();
+    showToast(refreshed ? "Food removed." : "Food removed, but nutrition data could not be refreshed.", refreshed ? "success" : "error");
+    return;
+  }
+  const index = localFoods.findIndex(item => item.id === id);
+  if (index >= 0) localFoods.splice(index, 1);
+  foods = localFoods;
+  save(KEYS.foods, localFoods);
+  renderNutrition();
+  renderDashboard();
+  showToast("Food removed");
+}
 function renderNutrition() { const total = foods.reduce((sum, food) => sum + food.protein * food.quantity, 0); const percent = Math.min(total / PROTEIN_GOAL * 100, 100); document.querySelector("#proteinTotal").textContent = `${formatNumber(total)}g`; document.querySelector("#proteinRing").style.setProperty("--protein", `${percent * 3.6}deg`); document.querySelector("#proteinMessage").textContent = total >= PROTEIN_GOAL ? "Goal reached. Recovery is covered." : `${formatNumber(PROTEIN_GOAL - total)}g remaining today.`; document.querySelector("#foodCount").textContent = `${foods.length} item${foods.length === 1 ? "" : "s"}`; const list = document.querySelector("#foodList"); list.classList.toggle("empty-state", !foods.length); list.innerHTML = foods.length ? foods.map(food => `<div class="food-row"><div><strong>${escapeHTML(food.name)}</strong><small>${food.protein}g per serving</small></div><div><strong>${food.quantity}</strong><small>quantity</small></div><div><strong>${formatNumber(food.protein * food.quantity)}g</strong><small>protein</small></div><button class="icon-btn" data-delete-food="${food.id}" aria-label="Delete food">×</button></div>`).join("") : "No foods logged today."; }
 
 function savePlan() { const name = document.querySelector("#planName").value.trim(); const planExercises = document.querySelector("#planExercises").value.split("\n").map(item => item.trim()).filter(Boolean); if (!name || !planExercises.length) return showToast("Add a plan name and at least one exercise.", "error"); if (editingPlanId) { const plan = plans.find(item => item.id === editingPlanId); plan.name = name; plan.exercises = planExercises; showToast("Plan updated"); } else { plans.push({ id: uid(), name, exercises: planExercises }); showToast("Plan created"); } save(KEYS.plans, plans); cancelPlanEdit(); renderPlans(); }
@@ -249,7 +327,7 @@ function renderFavourites() { const selected = document.querySelector("#exercise
 function renderAnalytics() { const allSets = workoutHistory.flatMap(workout => workout.sets); document.querySelector("#analyticsWorkouts").textContent = workoutHistory.length; document.querySelector("#analyticsSets").textContent = allSets.length; document.querySelector("#analyticsVolume").textContent = `${formatNumber(workoutHistory.reduce((sum, workout) => sum + workoutVolume(workout), 0))} kg`; const best = Math.max(0, ...allSets.map(set => epley(set.weight, set.reps))); document.querySelector("#analytics1rm").textContent = best ? `${formatNumber(best)} kg` : "—"; const recent = workoutHistory.slice(0, 7).reverse(); const chart = document.querySelector("#volumeChart"); chart.classList.toggle("empty-state", !recent.length); const max = Math.max(1, ...recent.map(workoutVolume)); chart.innerHTML = recent.length ? recent.map(item => `<div class="bar-wrap" title="${formatNumber(workoutVolume(item))} kg"><span class="bar" style="height:${Math.max(3, workoutVolume(item) / max * 90)}%"></span><small>${new Date(item.finishedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</small></div>`).join("") : "Finish a workout to see your volume trend."; const grouped = {}; allSets.forEach(set => { grouped[set.exercise] ??= { sets: 0, volume: 0, best: 0 }; grouped[set.exercise].sets++; grouped[set.exercise].volume += set.weight * set.reps; grouped[set.exercise].best = Math.max(grouped[set.exercise].best, epley(set.weight, set.reps)); }); const stats = document.querySelector("#exerciseStats"); const entries = Object.entries(grouped).sort((a, b) => b[1].volume - a[1].volume); stats.classList.toggle("empty-state", !entries.length); stats.innerHTML = entries.length ? entries.map(([name, data]) => `<div class="stat-row"><div><strong>${escapeHTML(name)}</strong><small>${data.sets} sets</small></div><div><strong>${formatNumber(data.volume)} kg</strong><small>volume</small></div><div><strong>${formatNumber(data.best)} kg</strong><small>best 1RM</small></div></div>`).join("") : "Exercise insights will appear here."; }
 function renderGuide() { const guide = formGuides[document.querySelector("#guideExercise").value] || defaultGuide; document.querySelector("#setupCues").innerHTML = guide.setup.map(item => `<li>${item}</li>`).join(""); document.querySelector("#executionCues").innerHTML = guide.execution.map(item => `<li>${item}</li>`).join(""); document.querySelector("#mistakeCues").innerHTML = guide.mistakes.map(item => `<li>${item}</li>`).join(""); }
 
-document.addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; if (button.dataset.view) showView(button.dataset.view); if (button.dataset.go) showView(button.dataset.go); if (button.dataset.deleteSet) deleteSet(button.dataset.deleteSet); if (button.dataset.deleteFood) { foods = foods.filter(item => item.id !== button.dataset.deleteFood); save(KEYS.foods, foods); renderNutrition(); renderDashboard(); showToast("Food removed"); } if (button.dataset.startPlan) startWorkout(plans.find(plan => plan.id === button.dataset.startPlan)); if (button.dataset.editPlan) editPlan(button.dataset.editPlan); if (button.dataset.deletePlan) askConfirmation("Delete this workout plan? This cannot be undone.", () => { plans = plans.filter(plan => plan.id !== button.dataset.deletePlan); save(KEYS.plans, plans); closeConfirmation(); renderPlans(); showToast("Plan deleted"); }); if (button.dataset.deleteWorkout) requestWorkoutDeletion(button.dataset.deleteWorkout); if (button.dataset.favourite) { document.querySelector("#exerciseSelect").value = button.dataset.favourite; renderFavourites(); } });
+document.addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; if (button.dataset.view) showView(button.dataset.view); if (button.dataset.go) showView(button.dataset.go); if (button.dataset.deleteSet) deleteSet(button.dataset.deleteSet); if (button.dataset.deleteFood) deleteFood(button.dataset.deleteFood); if (button.dataset.startPlan) startWorkout(plans.find(plan => plan.id === button.dataset.startPlan)); if (button.dataset.editPlan) editPlan(button.dataset.editPlan); if (button.dataset.deletePlan) askConfirmation("Delete this workout plan? This cannot be undone.", () => { plans = plans.filter(plan => plan.id !== button.dataset.deletePlan); save(KEYS.plans, plans); closeConfirmation(); renderPlans(); showToast("Plan deleted"); }); if (button.dataset.deleteWorkout) requestWorkoutDeletion(button.dataset.deleteWorkout); if (button.dataset.favourite) { document.querySelector("#exerciseSelect").value = button.dataset.favourite; renderFavourites(); } });
 document.querySelector("#mobileMenu").addEventListener("click", () => document.querySelector(".sidebar").classList.toggle("open"));
 document.querySelector("#dashboardStart").addEventListener("click", () => startWorkout()); document.querySelector("#addSet").addEventListener("click", addSet); document.querySelector("#finishWorkout").addEventListener("click", finishWorkout); document.querySelector("#toggleFavourite").addEventListener("click", toggleFavourite); document.querySelector("#exerciseSelect").addEventListener("change", renderFavourites); document.querySelector("#addFood").addEventListener("click", addFood); document.querySelector("#savePlan").addEventListener("click", savePlan); document.querySelector("#cancelPlanEdit").addEventListener("click", cancelPlanEdit); document.querySelector("#guideExercise").addEventListener("change", renderGuide); document.querySelector("#confirmCancel").addEventListener("click", closeConfirmation); document.querySelector("#confirmOkay").addEventListener("click", () => { if (confirmAction) confirmAction(); });
 document.querySelector("#signUp").addEventListener("click", signUp); document.querySelector("#signIn").addEventListener("click", signIn); document.querySelector("#signOut").addEventListener("click", signOut);
