@@ -44,6 +44,17 @@
           <article class="panel"><div class="panel-head"><div><p class="eyebrow">RECENT ACTIVITY</p><h3>Last workout</h3></div><button class="text-btn" data-go="workout">View history →</button></div><div id="lastWorkout" class="empty-state">No completed workouts yet. Your first session will appear here.</div></article>
           <article class="panel accent-panel"><p class="eyebrow">THIS WEEK</p><h3>Build the habit.</h3><p>Consistency beats intensity. Keep your training history alive with one focused session.</p><button class="btn btn-dark" data-go="plans">Choose a plan</button></article>
         </div>
+        <section class="supabase-test" aria-labelledby="supabaseAuthTitle">
+          <article class="panel form-panel">
+            <div class="panel-head"><div><p class="eyebrow">SUPABASE TEST</p><h3 id="supabaseAuthTitle">Authentication</h3></div><span class="status-pill" id="authStatus">Not signed in</span></div>
+            <div class="auth-form">
+              <label>Email<input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
+              <label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label>
+              <div class="button-row"><button class="btn btn-primary" id="signUp" type="button">Sign Up</button><button class="btn btn-dark" id="signIn" type="button">Sign In</button><button class="btn btn-ghost" id="signOut" type="button" disabled>Sign Out</button></div>
+            </div>
+          </article>
+
+        </section>
       </section>
 
       <section class="view" id="workoutView">
@@ -89,6 +100,7 @@
   </div>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <div id="confirmModal" class="modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal-icon">!</div><h3 id="confirmTitle">Are you sure?</h3><p id="confirmMessage"></p><div class="button-row"><button class="btn btn-ghost" id="confirmCancel">Cancel</button><button class="btn btn-danger" id="confirmOkay">Delete</button></div></div></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
 </body>
 </html>
