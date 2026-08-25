@@ -60,6 +60,10 @@ function showLoadingScreen(message = "Checking your secure session…") { setPri
 function showAuthenticationScreen() { setPrivateAppEnabled(false); document.querySelector("#appLoading").classList.add("hidden"); document.querySelector("#authGate").classList.remove("hidden"); document.querySelector("#appShell").classList.add("hidden"); document.querySelector("#appShell").setAttribute("aria-hidden", "true"); }
 function showAuthenticatedApp() { setPrivateAppEnabled(true); document.querySelector("#appLoading").classList.add("hidden"); document.querySelector("#authGate").classList.add("hidden"); document.querySelector("#appShell").classList.remove("hidden"); document.querySelector("#appShell").setAttribute("aria-hidden", "false"); }
 function requireAuthenticatedUser() { if (isAuthenticated()) return true; if (authState === "checking" || authState === "loading") showLoadingScreen(); else showAuthenticationScreen(); showToast("Please sign in to continue.", "error"); return false; }
+function accountInitials(user) { const label = user?.email || "LT"; return label.slice(0, 2).toUpperCase(); }
+function renderAccountControl(user) { const email = user?.email || "Signed in"; const initials = accountInitials(user); document.querySelector("#accountEmail").textContent = email; document.querySelector("#accountEmailShort").textContent = email; document.querySelector("#sidebarAccountEmail").textContent = email; document.querySelector("#accountInitials").textContent = initials; document.querySelector("#accountPanelInitials").textContent = initials; }
+function openAccountPanel() { if (!requireAuthenticatedUser()) return; renderAccountControl(authenticatedUser); document.querySelector("#accountPanel").classList.remove("hidden"); document.querySelector("#accountPanel").setAttribute("aria-hidden", "false"); document.querySelector("#signOut").focus(); }
+function closeAccountPanel() { document.querySelector("#accountPanel").classList.add("hidden"); document.querySelector("#accountPanel").setAttribute("aria-hidden", "true"); }
 
 function ensureWorkoutLoggerAvailable() {
   const workoutView = document.querySelector("#workoutView");
@@ -114,6 +118,7 @@ async function updateAuthUI(user) {
     initializeSelectors();
     authState = "authenticated";
     resolvedAuthUserId = userId;
+    renderAccountControl(user);
     ensureWorkoutLoggerAvailable(); ensureNutritionTrackerAvailable(); ensurePlansAvailable();
     renderAll();
     showView("dashboard");
@@ -125,7 +130,7 @@ async function updateAuthUI(user) {
     currentWorkout = emptyWorkout();
     editingSetId = null;
     workoutHistory = []; foods = []; plans = []; favourites = [];
-    closeConfirmation(); closePersonalRecords();
+    closeConfirmation(); closePersonalRecords(); closeAccountPanel();
     showAuthenticationScreen();
     resolvedAuthUserId = null;
   }
@@ -154,8 +159,9 @@ async function signIn() {
 
 async function signOut() {
   if (!requireSupabaseConfig()) return;
+  const signOutRequest = supabaseClient.auth.signOut();
   await updateAuthUI(null);
-  const { error } = await supabaseClient.auth.signOut();
+  const { error } = await signOutRequest;
   if (error) return showToast(error.message, "error");
   showToast("Signed out.");
 }
@@ -528,11 +534,12 @@ function renderGuide() { const guide = formGuides[document.querySelector("#guide
 document.addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; if (button.closest("#appShell") && !requireAuthenticatedUser()) return; if (button.dataset.view) showView(button.dataset.view); if (button.dataset.go) showView(button.dataset.go); if (button.dataset.editSet) editSet(button.dataset.editSet); if (button.dataset.deleteSet) deleteSet(button.dataset.deleteSet); if (button.dataset.deleteFood) deleteFood(button.dataset.deleteFood); if (button.dataset.startPlan) startWorkout(plans.find(plan => plan.id === button.dataset.startPlan)); if (button.dataset.editPlan) editPlan(button.dataset.editPlan); if (button.dataset.deletePlan) requestPlanDeletion(button.dataset.deletePlan); if (button.dataset.deleteWorkout) requestWorkoutDeletion(button.dataset.deleteWorkout); if (button.dataset.favourite) { document.querySelector("#exerciseSelect").value = button.dataset.favourite; renderFavourites(); } });
 document.querySelector("#mobileMenu").addEventListener("click", () => { if (requireAuthenticatedUser()) document.querySelector(".sidebar").classList.toggle("open"); });
 document.querySelector("#dashboardStart").addEventListener("click", () => startWorkout()); document.querySelector("#addSet").addEventListener("click", addSet); document.querySelector("#finishWorkout").addEventListener("click", finishWorkout); document.querySelector("#toggleFavourite").addEventListener("click", toggleFavourite); document.querySelector("#exerciseSelect").addEventListener("change", () => { if (requireAuthenticatedUser()) renderFavourites(); }); document.querySelector("#addFood").addEventListener("click", addFood); document.querySelector("#savePlan").addEventListener("click", savePlan); document.querySelector("#cancelPlanEdit").addEventListener("click", () => { if (requireAuthenticatedUser()) cancelPlanEdit(); }); document.querySelector("#guideExercise").addEventListener("change", () => { if (requireAuthenticatedUser()) renderGuide(); }); document.querySelector("#confirmCancel").addEventListener("click", closeConfirmation); document.querySelector("#confirmOkay").addEventListener("click", () => { if (confirmAction && requireAuthenticatedUser()) confirmAction(); });
-document.querySelector("#signUp").addEventListener("click", signUp); document.querySelector("#signIn").addEventListener("click", signIn); document.querySelector("#signOut").addEventListener("click", signOut);
+document.querySelector("#signUp").addEventListener("click", signUp); document.querySelector("#signIn").addEventListener("click", signIn); document.querySelector("#signOut").addEventListener("click", event => { event.stopPropagation(); signOut(); });
+document.querySelector("#accountButton").addEventListener("click", openAccountPanel); document.querySelector("#sidebarAccountButton").addEventListener("click", openAccountPanel); document.querySelector("#closeAccount").addEventListener("click", closeAccountPanel); document.querySelector("#closeAccountBackdrop").addEventListener("click", closeAccountPanel);
 document.querySelector("#closePrModal").addEventListener("click", closePersonalRecords);
 document.querySelector("#prModal").addEventListener("click", event => { if (event.target.id === "prModal") closePersonalRecords(); });
 document.querySelectorAll("[data-view-link]").forEach(link => link.addEventListener("click", event => { event.preventDefault(); showView(link.dataset.viewLink); }));
-document.addEventListener("keydown", event => { if (event.key === "Escape") closeConfirmation(); if (event.key === "Enter" && !document.querySelector("#authGate").classList.contains("hidden") && ["authEmail", "authPassword"].includes(event.target.id)) signIn(); else if (event.key === "Enter" && document.querySelector("#workoutView").classList.contains("active") && ["weightInput", "repsInput"].includes(event.target.id)) addSet(); });
+document.addEventListener("keydown", event => { if (event.key === "Escape") { closeConfirmation(); closeAccountPanel(); } if (event.key === "Enter" && !document.querySelector("#authGate").classList.contains("hidden") && ["authEmail", "authPassword"].includes(event.target.id)) signIn(); else if (event.key === "Enter" && document.querySelector("#workoutView").classList.contains("active") && ["weightInput", "repsInput"].includes(event.target.id)) addSet(); });
 
 function renderPersonalRecords() {
   const records = Object.entries(bestEstimated1RMs(workoutHistory.flatMap(workout => workout.sets))).sort((a, b) => b[1] - a[1]);
@@ -563,6 +570,6 @@ function renderWeeklyActivity(reference = new Date()) {
 }
 
 function updateNetworkStatus() { const offline = !navigator.onLine; document.querySelector("#offlineBanner").classList.toggle("hidden", !offline); document.body.classList.toggle("is-offline", offline); }
-function initializePWA() { updateNetworkStatus(); window.addEventListener("online", updateNetworkStatus); window.addEventListener("offline", updateNetworkStatus); if ("serviceWorker" in navigator && ["http:", "https:"].includes(location.protocol)) navigator.serviceWorker.register("./service-worker.js").catch(error => console.warn("Service worker registration failed:", error)); }
+function initializePWA() { updateNetworkStatus(); window.addEventListener("online", updateNetworkStatus); window.addEventListener("offline", updateNetworkStatus); if ("serviceWorker" in navigator && ["http:", "https:"].includes(location.protocol)) navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).then(registration => registration.update()).catch(error => console.warn("Service worker registration failed:", error)); }
 
 initializePWA(); initializeSupabase();
