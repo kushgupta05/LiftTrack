@@ -9,7 +9,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_6_skE_QXKO7BA8TuxoFgaw_7k9x18pw
 const supabaseClient = window.supabase && SUPABASE_URL !== "SUPABASE_URL" && SUPABASE_PUBLISHABLE_KEY !== "SUPABASE_PUBLISHABLE_KEY"
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
-const exercises = ["Back Squat", "Bench Press", "Deadlift", "Overhead Press", "Barbell Row", "Pull-Up", "Lat Pulldown", "Leg Press", "Romanian Deadlift", "Dumbbell Curl", "Triceps Pushdown"];
+const exercises = ["Back Squat", "Bench Press", "Deadlift", "Overhead Press", "Barbell Row", "Chest Supported Row", "Seated Cable Row", "Pull-Up", "Lat Pulldown", "Leg Press", "Romanian Deadlift", "Dumbbell Curl", "Hammer Curl", "Triceps Pushdown"];
 const formGuides = {
   "Back Squat": { setup: ["Set the bar across your upper back.", "Stand about shoulder-width with toes slightly out.", "Brace your trunk before unracking."], execution: ["Sit down between your hips.", "Keep your whole foot connected to the floor.", "Drive up while knees track over toes."], mistakes: ["Heels lifting off the floor.", "Knees collapsing inward.", "Losing your brace at the bottom."] },
   "Bench Press": { setup: ["Plant your feet firmly.", "Pin your shoulder blades back and down.", "Grip just outside shoulder width."], execution: ["Lower the bar to the lower chest.", "Keep forearms vertical at the bottom.", "Press up and slightly back."], mistakes: ["Shoulders rolling forward.", "Bouncing the bar off the chest.", "Lifting hips from the bench."] },
