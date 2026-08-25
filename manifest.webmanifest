@@ -1,0 +1,19 @@
+{
+  "name": "LiftTrack",
+  "short_name": "LiftTrack",
+  "description": "Cloud workout, nutrition, strength, and progress tracking.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f1eb",
+  "theme_color": "#171a16",
+  "icons": [
+    {
+      "src": "icons/lifttrack-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -3,12 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="LiftTrack — simple workout, nutrition and strength tracking.">
+  <meta name="description" content="LiftTrack — cloud workout, nutrition and strength tracking.">
+  <meta name="theme-color" content="#171a16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LiftTrack">
   <title>LiftTrack | Train with intent</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/lifttrack-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/lifttrack-icon.svg">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
-  <div class="app-shell">
+  <section id="appLoading" class="auth-screen" aria-live="polite"><div class="auth-brand"><span>LT</span><strong>LiftTrack</strong></div><div class="loading-ring" aria-hidden="true"></div><h1 id="loadingTitle">Loading LiftTrack</h1><p>Checking your secure session…</p></section>
+  <section id="authGate" class="auth-screen hidden" aria-labelledby="authTitle"><div class="auth-card"><div class="auth-brand"><span>LT</span><strong>LiftTrack</strong></div><p class="eyebrow">TRAIN WITH INTENT</p><h1 id="authTitle">Your training, everywhere.</h1><p>Sign in to access your cloud workouts, records, plans, and progress.</p><div class="auth-form"><label>Email<input id="authEmail" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label><div class="button-row"><button class="btn btn-primary" id="signIn" type="button">Sign In</button><button class="btn btn-ghost" id="signUp" type="button">Create account</button></div></div></div></section>
+  <div id="offlineBanner" class="offline-banner hidden" role="status">You’re offline. Cloud saves will not work until your connection returns.</div>
+  <div class="app-shell hidden" id="appShell" aria-hidden="true" inert>
     <aside class="sidebar">
       <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="LiftTrack home"><span>LT</span> LiftTrack</a>
       <nav class="nav" aria-label="Main navigation">
@@ -19,14 +30,14 @@
         <button class="nav-link" data-view="analytics"><span>↗</span> Analytics</button>
         <button class="nav-link" data-view="guide"><span>◎</span> Form guide</button>
       </nav>
-      <div class="sidebar-note"><span class="pulse-dot"></span><div><strong>Local mode</strong><small>Your data stays on this device.</small></div></div>
+      <div class="sidebar-note"><span class="pulse-dot"></span><div><strong>Cloud synced</strong><small>Protected by your LiftTrack account.</small></div></div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <button class="mobile-menu" id="mobileMenu" aria-label="Open menu">☰</button>
         <div><p class="eyebrow" id="todayLabel"></p><h1 id="pageTitle">Dashboard</h1></div>
-        <div class="avatar" aria-hidden="true">LT</div>
+        <button class="avatar" id="signOut" type="button" aria-label="Sign out" title="Sign out">LT</button>
       </header>
 
       <section class="view active" id="dashboardView">
@@ -35,26 +46,16 @@
           <button class="btn btn-light" id="dashboardStart">Start workout <span>→</span></button>
           <div class="hero-orb"></div>
         </div>
-        <div class="metric-grid">
+        <div class="metric-grid dashboard-metrics">
           <article class="metric-card"><div class="metric-icon">↗</div><p>Workout status</p><strong id="dashWorkoutStatus">Not started</strong><small id="dashWorkoutDetail">Ready for your next session</small></article>
           <article class="metric-card"><div class="metric-icon">◒</div><p>Protein today</p><strong><span id="dashProtein">0</span><em> / 160g</em></strong><div class="mini-track"><span id="dashProteinBar"></span></div></article>
           <article class="metric-card"><div class="metric-icon">◆</div><p>Best estimated 1RM</p><strong id="dashBest1rm">—</strong><small id="dashBestExercise">Log sets to establish a best</small></article>
+          <article class="metric-card streak-card" id="streakCard"><div class="metric-icon">🔥</div><p>Workout streak</p><strong><span id="currentStreak">0</span><em id="currentStreakUnit"> days</em></strong><small>Best streak: <span id="bestStreakText">0 days</span></small></article>
         </div>
         <div class="split-grid">
           <article class="panel"><div class="panel-head"><div><p class="eyebrow">RECENT ACTIVITY</p><h3>Last workout</h3></div><button class="text-btn" data-go="workout">View history →</button></div><div id="lastWorkout" class="empty-state">No completed workouts yet. Your first session will appear here.</div></article>
           <article class="panel accent-panel"><p class="eyebrow">THIS WEEK</p><h3>Build the habit.</h3><p>Consistency beats intensity. Keep your training history alive with one focused session.</p><button class="btn btn-dark" data-go="plans">Choose a plan</button></article>
         </div>
-        <section class="supabase-test" aria-labelledby="supabaseAuthTitle">
-          <article class="panel form-panel">
-            <div class="panel-head"><div><p class="eyebrow">SUPABASE TEST</p><h3 id="supabaseAuthTitle">Authentication</h3></div><span class="status-pill" id="authStatus">Not signed in</span></div>
-            <div class="auth-form">
-              <label>Email<input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
-              <label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label>
-              <div class="button-row"><button class="btn btn-primary" id="signUp" type="button">Sign Up</button><button class="btn btn-dark" id="signIn" type="button">Sign In</button><button class="btn btn-ghost" id="signOut" type="button" disabled>Sign Out</button></div>
-            </div>
-          </article>
-
-        </section>
       </section>
 
       <section class="view" id="workoutView">
@@ -88,7 +89,9 @@
       <section class="view" id="analyticsView">
         <div class="section-intro"><div><p class="eyebrow">PROGRESS</p><h2>Training analytics</h2><p>Your work, translated into momentum.</p></div></div>
         <div class="metric-grid four"><article class="metric-card"><p>Total workouts</p><strong id="analyticsWorkouts">0</strong></article><article class="metric-card"><p>Total sets</p><strong id="analyticsSets">0</strong></article><article class="metric-card"><p>Lifetime volume</p><strong id="analyticsVolume">0 kg</strong></article><article class="metric-card"><p>Best est. 1RM</p><strong id="analytics1rm">—</strong></article></div>
+        <article class="panel weekly-activity-panel"><div class="panel-head"><div><p class="eyebrow">THIS WEEK</p><h3>Weekly activity</h3></div><span class="status-pill" id="weekRange"></span></div><div id="weeklyDays" class="weekly-days"></div><div class="weekly-stats"><div><strong id="weekWorkouts">0</strong><small>workouts</small></div><div><strong id="weekSets">0</strong><small>sets</small></div><div><strong id="weekVolume">0 kg</strong><small>volume</small></div><div><strong id="weekVolumeChange">No previous week data</strong><small>vs last week</small></div></div></article>
         <div class="split-grid analytics-grid"><article class="panel"><div class="panel-head"><div><p class="eyebrow">LAST 7 WORKOUTS</p><h3>Recent volume</h3></div></div><div id="volumeChart" class="chart empty-state">Finish a workout to see your volume trend.</div></article><article class="panel"><div class="panel-head"><div><p class="eyebrow">BY MOVEMENT</p><h3>Exercise performance</h3></div></div><div id="exerciseStats" class="stats-list empty-state">Exercise insights will appear here.</div></article></div>
+        <article class="panel personal-records-panel"><div class="panel-head"><div><p class="eyebrow">PERSONAL RECORDS</p><h3>Estimated 1RM bests</h3></div><span class="status-pill" id="personalRecordCount">0 exercises</span></div><div id="personalRecords" class="records-list empty-state">Finish a workout to establish your first personal record.</div></article>
       </section>
 
       <section class="view" id="guideView">
@@ -100,7 +103,8 @@
   </div>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <div id="confirmModal" class="modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal-icon">!</div><h3 id="confirmTitle">Are you sure?</h3><p id="confirmMessage"></p><div class="button-row"><button class="btn btn-ghost" id="confirmCancel">Cancel</button><button class="btn btn-danger" id="confirmOkay">Delete</button></div></div></div>
+  <div id="prModal" class="modal pr-modal" aria-hidden="true"><div class="modal-card pr-modal-card" role="dialog" aria-modal="true" aria-labelledby="prTitle"><div class="pr-flame" aria-hidden="true">🔥</div><p class="eyebrow">PERSONAL BEST</p><h3 id="prTitle">NEW PR</h3><div id="prResults" class="pr-results"></div><button class="btn btn-primary" id="closePrModal" type="button">Celebrate &amp; continue</button></div></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js"></script>
+  <script src="script.js?v=3"></script>
 </body>
 </html>
