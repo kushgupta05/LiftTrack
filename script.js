@@ -18,7 +18,15 @@ const formGuides = {
 };
 const defaultGuide = { setup: ["Choose a stable stance.", "Set the joints in a comfortable position.", "Brace before starting each rep."], execution: ["Use a controlled range of motion.", "Keep tension on the target muscles.", "Breathe and repeat consistently."], mistakes: ["Using momentum instead of control.", "Rushing the lowering phase.", "Loading beyond your current technique."] };
 
-function emptyWorkout() { return { startedAt: null, planName: "", plannedExercises: [], sets: [] }; }
+function exerciseKey(value) { return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase(); }
+function cleanExerciseDisplay(value) { const clean = String(value || "").trim().replace(/\s+/g, " "); return clean && (clean === clean.toLocaleLowerCase() || clean === clean.toLocaleUpperCase()) ? clean.toLocaleLowerCase().replace(/(^|[\s/-])\p{L}/gu, letter => letter.toLocaleUpperCase()) : clean; }
+function canonicalExerciseName(value, candidates = []) { const key = exerciseKey(value); if (!key) return ""; const defaultName = exercises.find(name => exerciseKey(name) === key); if (defaultName) return defaultName; const existing = candidates.find(name => exerciseKey(name) === key); return cleanExerciseDisplay(existing || value); }
+function dedupeExerciseNames(items = []) { const names = new Map(); items.forEach(item => { const display = canonicalExerciseName(item, [...names.values()]); const key = exerciseKey(display); if (key && !names.has(key)) names.set(key, display); }); return [...names.values()]; }
+function sameExercise(left, right) { return !!exerciseKey(left) && exerciseKey(left) === exerciseKey(right); }
+function positiveSetCount(value) { const count = Number(value); return Number.isInteger(count) && count > 0 ? count : 3; }
+function normalizePlanExercises(items = []) { const normalized = new Map(); items.forEach(item => { const rawName = typeof item === "string" ? item : item.exercise || item.name; const exercise = canonicalExerciseName(rawName, [...normalized.values()].map(entry => entry.exercise)); const key = exerciseKey(exercise); if (key && !normalized.has(key)) normalized.set(key, { exercise, targetSets: typeof item === "string" ? 3 : positiveSetCount(item.targetSets ?? item.target_sets) }); }); return [...normalized.values()]; }
+function emptyWorkout() { return { startedAt: null, mode: "free", planId: null, planName: "", plannedExercises: [], sets: [], drafts: {} }; }
+function normalizeCurrentWorkout(value) { const workout = value && typeof value === "object" ? value : {}; const plannedExercises = normalizePlanExercises(workout.plannedExercises); return { ...emptyWorkout(), ...workout, mode: workout.mode === "plan" || (workout.planName && plannedExercises.length) ? "plan" : "free", plannedExercises, sets: Array.isArray(workout.sets) ? workout.sets : [], drafts: workout.drafts && typeof workout.drafts === "object" ? workout.drafts : {} }; }
 let currentWorkout = emptyWorkout();
 let workoutHistory = [];
 let authenticatedUser = null;
@@ -27,6 +35,7 @@ let foods = [];
 let plans = [];
 let favourites = [];
 let editingPlanId = null;
+let draftPlanExercises = [];
 let editingSetId = null;
 let confirmAction = null;
 let lastRenderedStreak = null;
@@ -90,7 +99,7 @@ function ensurePlansAvailable() {
   plansView.classList.remove("hidden");
   plansView.removeAttribute("aria-hidden");
   plansView.style.removeProperty("display");
-  ["planName", "planExercises", "savePlan", "cancelPlanEdit", "toggleFavourite"].forEach(id => {
+  ["planName", "planExerciseName", "planExerciseSets", "addPlanExercise", "savePlan", "cancelPlanEdit", "toggleFavourite"].forEach(id => {
     document.querySelector(`#${id}`).disabled = false;
   });
 }
@@ -114,7 +123,7 @@ async function updateAuthUI(user) {
     workoutHistory = []; foods = []; plans = []; favourites = [];
     const results = await Promise.all([loadSupabaseWorkoutHistory({ quiet: true }), loadSupabaseNutrition({ quiet: true }), loadSupabasePlans({ quiet: true }), loadSupabaseFavourites({ quiet: true })]);
     if (authenticatedUser?.id !== userId) return;
-    currentWorkout = load(KEYS.current, emptyWorkout());
+    currentWorkout = normalizeCurrentWorkout(load(KEYS.current, emptyWorkout()));
     initializeSelectors();
     authState = "authenticated";
     resolvedAuthUserId = userId;
@@ -176,7 +185,7 @@ async function loadSupabaseWorkoutHistory({ quiet = false } = {}) {
   }
   let sets = [];
   if (sessions.length) {
-    const { data: setRows, error: setsError } = await supabaseClient.from("workout_sets").select("id, workout_id, exercise, weight, reps, created_at");
+    const { data: setRows, error: setsError } = await supabaseClient.from("workout_sets").select("id, workout_id, exercise, weight, reps, created_at").order("created_at", { ascending: true });
     if (setsError) {
       if (!quiet) showToast(`Could not load workout sets: ${setsError.message}`, "error");
       return false;
@@ -221,7 +230,7 @@ async function loadSupabasePlans({ quiet = false } = {}) {
   }
   let exerciseRows = [];
   if (planRows.length) {
-    const { data, error } = await supabaseClient.from("workout_plan_exercises").select("id, workout_plan_id, exercise, position").order("position", { ascending: true });
+    const { data, error } = await supabaseClient.from("workout_plan_exercises").select("id, workout_plan_id, exercise, position, target_sets").order("position", { ascending: true });
     if (error) {
       if (!quiet) showToast(`Could not load plan exercises: ${error.message}`, "error");
       return false;
@@ -232,9 +241,9 @@ async function loadSupabasePlans({ quiet = false } = {}) {
   const exercisesByPlan = new Map();
   exerciseRows.forEach(row => {
     if (!exercisesByPlan.has(row.workout_plan_id)) exercisesByPlan.set(row.workout_plan_id, []);
-    exercisesByPlan.get(row.workout_plan_id).push(row.exercise);
+    exercisesByPlan.get(row.workout_plan_id).push({ exercise: row.exercise, targetSets: positiveSetCount(row.target_sets) });
   });
-  plans = planRows.map(plan => ({ id: plan.id, name: plan.name, exercises: exercisesByPlan.get(plan.id) || [], source: "supabase" }));
+  plans = planRows.map(plan => ({ id: plan.id, name: plan.name, createdAt: plan.created_at, updatedAt: plan.updated_at, exercises: exercisesByPlan.get(plan.id) || [], source: "supabase" }));
   renderPlans();
   return true;
 }
@@ -248,7 +257,7 @@ async function loadSupabaseFavourites({ quiet = false } = {}) {
     return false;
   }
   if (authenticatedUser?.id !== requestedUserId) return false;
-  favourites = data.map(row => row.exercise);
+  favourites = dedupeExerciseNames(data.map(row => row.exercise));
   renderFavourites();
   return true;
 }
@@ -261,8 +270,8 @@ async function initializeSupabase() {
   else await updateAuthUI(data.session?.user ?? null);
   supabaseClient.auth.onAuthStateChange((_event, session) => { updateAuthUI(session?.user ?? null); });
 }
-function askConfirmation(message, action, label = "Delete") { confirmAction = action; document.querySelector("#confirmMessage").textContent = message; document.querySelector("#confirmOkay").textContent = label; document.querySelector("#confirmModal").classList.add("open"); document.querySelector("#confirmModal").setAttribute("aria-hidden", "false"); }
-function closeConfirmation() { confirmAction = null; document.querySelector("#confirmModal").classList.remove("open"); document.querySelector("#confirmModal").setAttribute("aria-hidden", "true"); }
+function askConfirmation(message, action, label = "Delete", cancelLabel = "Cancel") { confirmAction = action; document.querySelector("#confirmMessage").textContent = message; document.querySelector("#confirmOkay").textContent = label; document.querySelector("#confirmCancel").textContent = cancelLabel; document.querySelector("#confirmModal").classList.add("open"); document.querySelector("#confirmModal").setAttribute("aria-hidden", "false"); }
+function closeConfirmation() { confirmAction = null; document.querySelector("#confirmCancel").textContent = "Cancel"; document.querySelector("#confirmModal").classList.remove("open"); document.querySelector("#confirmModal").setAttribute("aria-hidden", "true"); }
 
 function showView(name) { if (!requireAuthenticatedUser()) return; if (name === "workout") ensureWorkoutLoggerAvailable(); if (name === "nutrition") ensureNutritionTrackerAvailable(); if (name === "plans") ensurePlansAvailable(); document.querySelectorAll(".view").forEach(view => view.classList.remove("active")); document.querySelector(`#${name}View`).classList.add("active"); document.querySelectorAll(".nav-link").forEach(link => link.classList.toggle("active", link.dataset.view === name)); document.querySelector("#pageTitle").textContent = ({ dashboard: "Dashboard", workout: "Workout logger", nutrition: "Nutrition", plans: "Workout plans", analytics: "Analytics", guide: "Form guide" })[name]; document.querySelector(".sidebar").classList.remove("open"); window.scrollTo({ top: 0, behavior: "smooth" }); if (name === "analytics") { renderAnalytics(); renderPersonalRecords(); renderWeeklyActivity(); } }
 
@@ -271,12 +280,14 @@ function renderExerciseSelectors() {
   const guideSelect = document.querySelector("#guideExercise");
   const selectedWorkout = workoutSelect.value;
   const selectedGuide = guideSelect.value;
-  const available = [...new Set([...favourites, ...currentWorkout.plannedExercises, ...exercises])];
-  const options = available.map(name => `<option>${escapeHTML(name)}</option>`).join("");
-  workoutSelect.innerHTML = options;
-  guideSelect.innerHTML = options;
-  if (available.includes(selectedWorkout)) workoutSelect.value = selectedWorkout;
-  if (available.includes(selectedGuide)) guideSelect.value = selectedGuide;
+  const planNames = plans.flatMap(plan => normalizePlanExercises(plan.exercises).map(item => item.exercise));
+  const allAvailable = dedupeExerciseNames([...favourites, ...planNames, ...exercises]);
+  const workoutAvailable = currentWorkout.mode === "plan" ? dedupeExerciseNames(normalizePlanExercises(currentWorkout.plannedExercises).map(item => item.exercise)) : allAvailable;
+  workoutSelect.innerHTML = workoutAvailable.map(name => `<option>${escapeHTML(name)}</option>`).join("");
+  guideSelect.innerHTML = allAvailable.map(name => `<option>${escapeHTML(name)}</option>`).join("");
+  document.querySelector("#exerciseOptions").innerHTML = allAvailable.map(name => `<option value="${escapeHTML(name)}"></option>`).join("");
+  if (workoutAvailable.includes(selectedWorkout)) workoutSelect.value = selectedWorkout;
+  if (allAvailable.includes(selectedGuide)) guideSelect.value = selectedGuide;
 }
 function initializeSelectors() { renderExerciseSelectors(); }
 function renderAll() { renderDashboard(); renderWorkout(); renderNutrition(); renderPlans(); renderFavourites(); renderAnalytics(); renderPersonalRecords(); renderWeeklyActivity(); renderGuide(); }
@@ -291,16 +302,33 @@ function renderDashboard() {
   const currentStreak = calculateCurrentStreak(workoutHistory); const bestStreak = calculateLongestStreak(workoutHistory); document.querySelector("#currentStreak").textContent = currentStreak; document.querySelector("#currentStreakUnit").textContent = ` ${workoutDayUnit(currentStreak)}`; document.querySelector("#bestStreakText").textContent = formatWorkoutDays(bestStreak); const streakCard = document.querySelector("#streakCard"); if (lastRenderedStreak !== null && currentStreak > lastRenderedStreak) { streakCard.classList.remove("streak-increased"); void streakCard.offsetWidth; streakCard.classList.add("streak-increased"); } lastRenderedStreak = currentStreak;
 }
 
-function startWorkout(plan = null) { if (!requireAuthenticatedUser()) return; if (!currentWorkout.startedAt) currentWorkout.startedAt = new Date().toISOString(); if (plan) { currentWorkout.planName = plan.name; currentWorkout.plannedExercises = plan.exercises; renderExerciseSelectors(); if (plan.exercises.length) document.querySelector("#exerciseSelect").value = plan.exercises[0]; renderFavourites(); } save(KEYS.current, currentWorkout); renderWorkout(); showView("workout"); showToast(plan ? `${plan.name} started` : "Workout ready"); }
+function beginPlanWorkout(plan) {
+  currentWorkout = { ...emptyWorkout(), startedAt: new Date().toISOString(), mode: "plan", planId: plan.id, planName: plan.name, plannedExercises: normalizePlanExercises(plan.exercises), sets: [] };
+  save(KEYS.current, currentWorkout); renderExerciseSelectors(); renderWorkout(); renderFavourites(); showView("workout"); showToast(`${plan.name} started`);
+}
+function startWorkout(plan = null) {
+  if (!requireAuthenticatedUser()) return;
+  if (plan) {
+    if (currentWorkout.mode === "plan" && currentWorkout.planId === plan.id && currentWorkout.startedAt) { renderExerciseSelectors(); renderWorkout(); showView("workout"); return showToast(`${plan.name} resumed`); }
+    if (currentWorkout.sets.length) return askConfirmation("You already have a workout in progress. Start this plan and replace it?", () => { closeConfirmation(); beginPlanWorkout(plan); }, "Start Plan", "Keep Workout");
+    return beginPlanWorkout(plan);
+  } else if (!currentWorkout.startedAt) {
+    currentWorkout = { ...emptyWorkout(), startedAt: new Date().toISOString() };
+  }
+  save(KEYS.current, currentWorkout);
+  renderExerciseSelectors(); renderWorkout(); renderFavourites(); showView("workout");
+  showToast(currentWorkout.mode === "plan" ? `${currentWorkout.planName} resumed` : "Workout ready");
+}
 function addSet() { if (!requireAuthenticatedUser()) return; const exercise = document.querySelector("#exerciseSelect").value; const weight = Number(document.querySelector("#weightInput").value); const reps = Number(document.querySelector("#repsInput").value); if (!weight || weight <= 0 || !Number.isInteger(reps) || reps <= 0) return showToast("Enter a valid weight and whole-number reps.", "error"); if (!currentWorkout.startedAt) currentWorkout.startedAt = new Date().toISOString(); const existing = editingSetId ? currentWorkout.sets.find(set => set.id === editingSetId) : null; if (existing) Object.assign(existing, { exercise, weight, reps }); else currentWorkout.sets.push({ id: uid(), exercise, weight, reps, createdAt: new Date().toISOString() }); const message = existing ? `${exercise} set updated` : `${exercise} set added`; editingSetId = null; document.querySelector("#addSet").textContent = "Add set"; save(KEYS.current, currentWorkout); document.querySelector("#repsInput").value = ""; renderWorkout(); renderDashboard(); showToast(message); }
 function editSet(id) { if (!requireAuthenticatedUser()) return; const set = currentWorkout.sets.find(item => item.id === id); if (!set) return; editingSetId = id; document.querySelector("#exerciseSelect").value = set.exercise; document.querySelector("#weightInput").value = set.weight; document.querySelector("#repsInput").value = set.reps; document.querySelector("#addSet").textContent = "Update set"; document.querySelector("#weightInput").focus(); }
-function deleteSet(id) { if (!requireAuthenticatedUser()) return; currentWorkout.sets = currentWorkout.sets.filter(set => set.id !== id); if (editingSetId === id) { editingSetId = null; document.querySelector("#addSet").textContent = "Add set"; } if (!currentWorkout.sets.length) currentWorkout.startedAt = null; save(KEYS.current, currentWorkout); renderWorkout(); renderDashboard(); showToast("Set removed"); }
+function deleteSet(id) { if (!requireAuthenticatedUser()) return; currentWorkout.sets = currentWorkout.sets.filter(set => set.id !== id); if (editingSetId === id) { editingSetId = null; document.querySelector("#addSet").textContent = "Add set"; } if (!currentWorkout.sets.length && currentWorkout.mode !== "plan") currentWorkout.startedAt = null; save(KEYS.current, currentWorkout); renderWorkout(); renderDashboard(); showToast("Set removed"); }
 function volumeOf(sets) { return sets.reduce((sum, set) => sum + set.weight * set.reps, 0); }
 function workoutVolume(workout) { return Number.isFinite(workout.totalVolume) ? workout.totalVolume : volumeOf(workout.sets); }
 function bestEstimated1RMs(sets) {
   return sets.reduce((bests, set) => {
     const estimate = epley(Number(set.weight), Number(set.reps));
-    if (Number.isFinite(estimate) && estimate > (bests[set.exercise] || 0)) bests[set.exercise] = estimate;
+    const exercise = canonicalExerciseName(set.exercise, Object.keys(bests));
+    if (Number.isFinite(estimate) && estimate > (bests[exercise] || 0)) bests[exercise] = estimate;
     return bests;
   }, {});
 }
@@ -312,7 +340,7 @@ function detectPersonalRecords(currentSets, historicalSets) {
     .map(([exercise, best]) => ({ exercise, previousBest: previousBests[exercise] || null, newBest: best }));
 }
 async function loadPreviousSetsForExercises(exerciseNames) {
-  const { data, error } = await supabaseClient.from("workout_sets").select("exercise, weight, reps").in("exercise", exerciseNames);
+  const { data, error } = await supabaseClient.from("workout_sets").select("exercise, weight, reps");
   if (error) throw error;
   return data || [];
 }
@@ -325,7 +353,7 @@ function showPersonalRecords(records) {
 }
 function closePersonalRecords() { document.querySelector("#prModal").classList.remove("open"); document.querySelector("#prModal").setAttribute("aria-hidden", "true"); }
 function clearCurrentWorkout() {
-  currentWorkout = { startedAt: null, planName: "", plannedExercises: [], sets: [] };
+  currentWorkout = emptyWorkout();
   editingSetId = null; document.querySelector("#addSet").textContent = "Add set";
   save(KEYS.current, currentWorkout);
 }
@@ -406,11 +434,86 @@ function requestWorkoutDeletion(id) {
 function finishWorkout() {
   if (!requireAuthenticatedUser()) return;
   if (!currentWorkout.sets.length) return showToast("Add at least one set before finishing.", "error");
-  askConfirmation("Finish and save this workout to your history?", async () => {
+  const targetSets = currentWorkout.mode === "plan" ? normalizePlanExercises(currentWorkout.plannedExercises).reduce((sum, item) => sum + item.targetSets, 0) : 0;
+  const completedSlots = currentWorkout.mode === "plan" ? new Set(currentWorkout.sets.filter(set => set.slotId).map(set => set.slotId)).size : 0;
+  const unfinished = Math.max(0, targetSets - completedSlots);
+  askConfirmation(unfinished ? `Your plan has ${unfinished} unfinished set${unfinished === 1 ? "" : "s"}. Finish workout anyway?` : "Finish and save this workout to your history?", async () => {
     await finishAuthenticatedWorkout();
-  }, "Finish");
+  }, unfinished ? "Finish Anyway" : "Finish", unfinished ? "Continue Workout" : "Cancel");
 }
 function renderWorkout() { const sets = currentWorkout.sets; document.querySelector("#workoutHeading").textContent = currentWorkout.planName || "Today’s workout"; document.querySelector("#workoutStarted").textContent = currentWorkout.startedAt ? `Started ${new Date(currentWorkout.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Add your first working set to begin."; document.querySelector("#currentSets").textContent = sets.length; document.querySelector("#currentVolume").textContent = `${formatNumber(volumeOf(sets))} kg`; const best = Math.max(0, ...sets.map(set => epley(set.weight, set.reps))); document.querySelector("#current1rm").textContent = best ? `${formatNumber(best)} kg` : "—"; document.querySelector("#sessionPill").textContent = sets.length ? "In progress" : "Waiting"; document.querySelector("#sessionPill").classList.toggle("live", !!sets.length); const list = document.querySelector("#currentSetList"); list.classList.toggle("empty-state", !sets.length); list.innerHTML = sets.length ? sets.map((set, index) => `<div class="set-row"><span class="set-number">${index + 1}</span><div><strong>${escapeHTML(set.exercise)}</strong><small>Exercise</small></div><div><strong>${set.weight} kg</strong><small>Weight</small></div><div><strong>${set.reps}</strong><small>Reps</small></div><div><strong>${formatNumber(epley(set.weight, set.reps))} kg</strong><small>Est. 1RM</small></div><button class="icon-btn edit-set-btn" data-edit-set="${set.id}" aria-label="Edit set">✎</button><button class="icon-btn" data-delete-set="${set.id}" aria-label="Delete set">×</button></div>`).join("") : "No sets logged yet."; const history = document.querySelector("#historyList"); history.classList.toggle("empty-state", !workoutHistory.length); history.innerHTML = workoutHistory.length ? workoutHistory.map(workout => `<div class="history-card"><div><strong>${escapeHTML(workout.name)}</strong><small>${formatDate(workout.finishedAt)}</small></div><div><strong>${workout.sets.length}</strong><small>sets</small></div><div><strong>${formatNumber(workoutVolume(workout))} kg</strong><small>volume</small></div><div><strong>${new Set(workout.sets.map(set => set.exercise)).size}</strong><small>exercises</small></div><button class="icon-btn" data-delete-workout="${workout.id}" aria-label="Delete workout">×</button></div>`).join("") : "Completed workouts will be saved here."; }
+
+const renderWorkoutBase = renderWorkout;
+renderWorkout = function renderWorkoutWithMode() {
+  renderWorkoutBase();
+  const structured = currentWorkout.mode === "plan";
+  document.querySelector("#freeWorkoutEntry").classList.toggle("hidden", structured);
+  document.querySelector("#structuredWorkout").classList.toggle("hidden", !structured);
+  document.querySelector("#currentSetsPanel").classList.toggle("hidden", structured);
+  if (structured) renderStructuredWorkout();
+};
+
+function structuredSlotId(exerciseIndex, setIndex) { return `plan-${exerciseIndex}-${setIndex}`; }
+function previousExercisePerformance(exercise) {
+  const matchingPlan = workoutHistory.find(workout => workout.name === currentWorkout.planName && workout.sets.some(set => sameExercise(set.exercise, exercise)));
+  const workout = matchingPlan || workoutHistory.find(item => item.sets.some(set => sameExercise(set.exercise, exercise)));
+  return workout ? { workout, sets: workout.sets.filter(set => sameExercise(set.exercise, exercise)) } : { workout: null, sets: [] };
+}
+function historicalExerciseBest(exercise) { return Math.max(0, ...workoutHistory.flatMap(workout => workout.sets).filter(set => sameExercise(set.exercise, exercise)).map(set => epley(Number(set.weight), Number(set.reps)))); }
+function structuredSetFeedback(set, setIndex, previousSets, historicalBest) {
+  const feedback = [`${formatNumber(set.weight * set.reps)} kg set volume`];
+  const previous = previousSets[setIndex];
+  if (previous) {
+    const weightChange = Number(set.weight) - Number(previous.weight); const repsChange = Number(set.reps) - Number(previous.reps);
+    if (weightChange && repsChange) feedback.push(`${weightChange > 0 ? "+" : ""}${weightChange} kg, ${repsChange > 0 ? "+" : ""}${repsChange} reps vs last time`);
+    else if (weightChange) feedback.push(`${weightChange > 0 ? "+" : ""}${weightChange} kg vs last time${weightChange > 0 && repsChange === 0 ? " 🔥" : ""}`);
+    else if (repsChange) feedback.push(`${repsChange > 0 ? "+" : ""}${repsChange} reps vs last time${repsChange > 0 ? " 🔥" : ""}`);
+    else feedback.push("Matched previous set");
+  }
+  const estimate = epley(set.weight, set.reps);
+  if (!historicalBest || estimate > historicalBest) feedback.push(historicalBest ? `🏆 Potential new PR: ${formatNumber(historicalBest)} → ${formatNumber(estimate)} kg` : `🏆 Potential first recorded PR: ${formatNumber(estimate)} kg`);
+  return feedback;
+}
+function renderStructuredWorkout() {
+  const container = document.querySelector("#structuredWorkout");
+  const planExercises = normalizePlanExercises(currentWorkout.plannedExercises);
+  const total = planExercises.reduce((sum, item) => sum + item.targetSets, 0);
+  const completed = planExercises.reduce((sum, item, exerciseIndex) => sum + Array.from({ length: item.targetSets }, (_, setIndex) => currentWorkout.sets.some(set => set.slotId === structuredSlotId(exerciseIndex, setIndex))).filter(Boolean).length, 0);
+  const percent = total ? Math.round(completed / total * 100) : 0;
+  container.innerHTML = `<div class="structured-progress panel"><div><p class="eyebrow">${escapeHTML(currentWorkout.planName || "PLAN WORKOUT")}</p><h2>${completed} / ${total} sets completed</h2></div><strong>${percent}%</strong><div class="structured-progress-track"><span style="width:${percent}%"></span></div></div>${planExercises.map((item, exerciseIndex) => {
+    const previousPerformance = previousExercisePerformance(item.exercise); const previousSets = previousPerformance.sets;
+    const historicalBest = historicalExerciseBest(item.exercise);
+    const slots = Array.from({ length: item.targetSets }, (_, setIndex) => {
+      const slotId = structuredSlotId(exerciseIndex, setIndex);
+      const set = currentWorkout.sets.find(entry => entry.slotId === slotId);
+      const draft = currentWorkout.drafts[slotId] || {};
+      const previousSet = previousSets[setIndex];
+      const feedback = set ? structuredSetFeedback(set, setIndex, previousSets, historicalBest) : [];
+      return `<div class="structured-set-slot${set ? " completed" : ""}"><div class="slot-heading"><strong>${set ? "✓" : "○"} Set ${setIndex + 1}</strong>${set ? `<small>${set.weight} kg × ${set.reps}</small>` : previousSet ? `<small class="previous-slot-label">Last: ${previousSet.weight} kg × ${previousSet.reps}</small>` : ""}</div><div class="slot-inputs"><label>Weight<input inputmode="decimal" type="number" min="0" step="0.5" data-slot-weight="${slotId}" value="${set?.weight ?? draft.weight ?? ""}" placeholder="${previousSet?.weight ?? "kg"}"></label><label>Reps<input inputmode="numeric" type="number" min="1" step="1" data-slot-reps="${slotId}" value="${set?.reps ?? draft.reps ?? ""}" placeholder="${previousSet?.reps ?? "reps"}"></label><button class="btn ${set ? "btn-ghost" : "btn-primary"}" data-complete-slot="${slotId}" data-exercise-index="${exerciseIndex}" data-set-index="${setIndex}">${set ? "Update set" : "Complete set"}</button>${set ? `<button class="icon-btn" data-delete-set="${set.id}" aria-label="Clear set ${setIndex + 1}">×</button>` : previousSet ? `<button class="btn use-previous-btn" data-use-previous="${slotId}" data-exercise-index="${exerciseIndex}" data-set-index="${setIndex}">Use previous</button>` : ""}</div>${feedback.length ? `<div class="slot-feedback">${feedback.map(message => `<span>${escapeHTML(message)}</span>`).join("")}</div>` : ""}</div>`;
+    }).join("");
+    const exerciseCompleted = Array.from({ length: item.targetSets }, (_, setIndex) => currentWorkout.sets.some(set => set.slotId === structuredSlotId(exerciseIndex, setIndex))).filter(Boolean).length;
+    const previous = previousSets.length ? `<details class="previous-performance"><summary>Previous workout: ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(previousPerformance.workout.finishedAt))}</summary><p>${previousSets.slice(0, 4).map(set => `${set.weight} kg × ${set.reps}`).join(" · ")}</p></details>` : "";
+    return `<article class="structured-exercise panel${exerciseCompleted === item.targetSets ? " exercise-complete" : ""}"><header><div><p class="eyebrow">EXERCISE ${exerciseIndex + 1}</p><h3>${exerciseCompleted === item.targetSets ? "✓ " : ""}${escapeHTML(item.exercise)}</h3></div><strong>${exerciseCompleted} / ${item.targetSets} sets</strong></header>${previous}${slots}</article>`;
+  }).join("")}`;
+}
+function completeStructuredSet(slotId, exerciseIndex, setIndex) {
+  if (!requireAuthenticatedUser() || currentWorkout.mode !== "plan") return;
+  const item = normalizePlanExercises(currentWorkout.plannedExercises)[exerciseIndex];
+  if (!item || setIndex >= item.targetSets) return;
+  const weight = Number(document.querySelector(`[data-slot-weight="${slotId}"]`)?.value);
+  const reps = Number(document.querySelector(`[data-slot-reps="${slotId}"]`)?.value);
+  if (!weight || weight <= 0 || !Number.isInteger(reps) || reps <= 0) return showToast("Enter a valid weight and whole-number reps.", "error");
+  const existing = currentWorkout.sets.find(set => set.slotId === slotId);
+  if (existing) Object.assign(existing, { exercise: item.exercise, weight, reps });
+  else currentWorkout.sets.push({ id: uid(), slotId, exercise: item.exercise, weight, reps, createdAt: new Date().toISOString() });
+  delete currentWorkout.drafts[slotId];
+  save(KEYS.current, currentWorkout); renderWorkout(); renderDashboard();
+  const previousSets = previousExercisePerformance(item.exercise).sets;
+  const feedback = structuredSetFeedback({ weight, reps }, setIndex, previousSets, historicalExerciseBest(item.exercise));
+  showToast(`Set ${setIndex + 1} ${existing ? "updated" : "complete"} ✓ · ${feedback[0]}`);
+}
+function saveStructuredDraft(slotId, field, value) { if (currentWorkout.mode !== "plan") return; currentWorkout.drafts[slotId] ??= {}; currentWorkout.drafts[slotId][field] = value; if (!currentWorkout.drafts[slotId].weight && !currentWorkout.drafts[slotId].reps) delete currentWorkout.drafts[slotId]; save(KEYS.current, currentWorkout); }
+function usePreviousSet(slotId, exerciseIndex, setIndex) { if (!requireAuthenticatedUser() || currentWorkout.mode !== "plan") return; const item = normalizePlanExercises(currentWorkout.plannedExercises)[exerciseIndex]; const previous = item ? previousExercisePerformance(item.exercise).sets[setIndex] : null; if (!previous) return; currentWorkout.drafts[slotId] = { weight: String(previous.weight), reps: String(previous.reps) }; save(KEYS.current, currentWorkout); const weightInput = document.querySelector(`[data-slot-weight="${slotId}"]`); const repsInput = document.querySelector(`[data-slot-reps="${slotId}"]`); if (weightInput) weightInput.value = previous.weight; if (repsInput) repsInput.value = previous.reps; showToast("Previous values filled. Complete the set when ready."); }
 
 function clearFoodInputs() { document.querySelector("#foodName").value = ""; document.querySelector("#foodProtein").value = ""; document.querySelector("#foodQuantity").value = "1"; }
 async function addFood() {
@@ -440,7 +543,7 @@ async function deleteFood(id) {
 }
 function renderNutrition() { const total = foods.reduce((sum, food) => sum + food.protein * food.quantity, 0); const percent = Math.min(total / PROTEIN_GOAL * 100, 100); document.querySelector("#proteinTotal").textContent = `${formatNumber(total)}g`; document.querySelector("#proteinRing").style.setProperty("--protein", `${percent * 3.6}deg`); document.querySelector("#proteinMessage").textContent = total >= PROTEIN_GOAL ? "Goal reached. Recovery is covered." : `${formatNumber(PROTEIN_GOAL - total)}g remaining today.`; document.querySelector("#foodCount").textContent = `${foods.length} item${foods.length === 1 ? "" : "s"}`; const list = document.querySelector("#foodList"); list.classList.toggle("empty-state", !foods.length); list.innerHTML = foods.length ? foods.map(food => `<div class="food-row"><div><strong>${escapeHTML(food.name)}</strong><small>${food.protein}g per serving</small></div><div><strong>${food.quantity}</strong><small>quantity</small></div><div><strong>${formatNumber(food.protein * food.quantity)}g</strong><small>protein</small></div><button class="icon-btn" data-delete-food="${food.id}" aria-label="Delete food">×</button></div>`).join("") : "No foods logged today."; }
 
-function planExerciseRows(planId, planExercises) { return planExercises.map((exercise, position) => ({ workout_plan_id: planId, exercise, position })); }
+function planExerciseRows(planId, planExercises) { return normalizePlanExercises(planExercises).map((item, position) => ({ workout_plan_id: planId, exercise: item.exercise, target_sets: item.targetSets, position })); }
 
 async function createSupabasePlan(user, name, planExercises) {
   const { data: plan, error: planError } = await supabaseClient.from("workout_plans").insert({ user_id: user.id, name }).select("id").single();
@@ -457,17 +560,17 @@ async function createSupabasePlan(user, name, planExercises) {
 }
 
 async function updateSupabasePlan(plan, name, planExercises) {
-  const { error: nameError } = await supabaseClient.from("workout_plans").update({ name }).eq("id", plan.id);
+  const { error: nameError } = await supabaseClient.from("workout_plans").update({ name, updated_at: new Date().toISOString() }).eq("id", plan.id);
   if (nameError) return showToast(`Plan was not updated: ${nameError.message}`, "error");
   const { error: deleteError } = await supabaseClient.from("workout_plan_exercises").delete().eq("workout_plan_id", plan.id);
   if (deleteError) {
-    await supabaseClient.from("workout_plans").update({ name: plan.name }).eq("id", plan.id);
+    await supabaseClient.from("workout_plans").update({ name: plan.name, ...(plan.updatedAt ? { updated_at: plan.updatedAt } : {}) }).eq("id", plan.id);
     return showToast(`Existing plan exercises could not be replaced: ${deleteError.message}`, "error");
   }
   const { error: insertError } = await supabaseClient.from("workout_plan_exercises").insert(planExerciseRows(plan.id, planExercises));
   if (insertError) {
     const rollbackResults = await Promise.all([
-      supabaseClient.from("workout_plans").update({ name: plan.name }).eq("id", plan.id),
+      supabaseClient.from("workout_plans").update({ name: plan.name, ...(plan.updatedAt ? { updated_at: plan.updatedAt } : {}) }).eq("id", plan.id),
       plan.exercises.length ? supabaseClient.from("workout_plan_exercises").insert(planExerciseRows(plan.id, plan.exercises)) : Promise.resolve({ error: null })
     ]);
     const rollbackError = rollbackResults.find(result => result.error)?.error;
@@ -482,16 +585,47 @@ async function updateSupabasePlan(plan, name, planExercises) {
 async function savePlan() {
   if (!requireAuthenticatedUser()) return;
   const name = document.querySelector("#planName").value.trim();
-  const planExercises = document.querySelector("#planExercises").value.split("\n").map(item => item.trim()).filter(Boolean);
+  const planExercises = collectDraftPlanExercises();
+  if (planExercises === null) return;
   if (!name || !planExercises.length) return showToast("Add a plan name and at least one exercise.", "error");
   const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
   if (userError || !user) return showToast(userError?.message || "Your session expired. Sign in again before saving a plan.", "error");
   const existingPlan = editingPlanId ? plans.find(item => item.id === editingPlanId) : null;
   return existingPlan ? updateSupabasePlan(existingPlan, name, planExercises) : createSupabasePlan(user, name, planExercises);
 }
-function editPlan(id) { const plan = plans.find(item => item.id === id); editingPlanId = id; document.querySelector("#planName").value = plan.name; document.querySelector("#planExercises").value = plan.exercises.join("\n"); document.querySelector("#planFormTitle").textContent = "Edit plan"; document.querySelector("#savePlan").textContent = "Update plan"; document.querySelector("#cancelPlanEdit").classList.remove("hidden"); }
-function cancelPlanEdit() { editingPlanId = null; document.querySelector("#planName").value = ""; document.querySelector("#planExercises").value = ""; document.querySelector("#planFormTitle").textContent = "Create a plan"; document.querySelector("#savePlan").textContent = "Save plan"; document.querySelector("#cancelPlanEdit").classList.add("hidden"); }
-function renderPlans() { const list = document.querySelector("#plansList"); list.classList.toggle("empty-state", !plans.length); list.innerHTML = plans.length ? plans.map(plan => `<article class="plan-card"><p class="eyebrow">${plan.exercises.length} EXERCISES</p><h3>${escapeHTML(plan.name)}</h3><ul>${plan.exercises.map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul><div class="plan-card-actions"><button class="btn btn-primary" data-start-plan="${plan.id}">Start plan</button><button class="btn btn-ghost" data-edit-plan="${plan.id}">Edit</button><button class="icon-btn" data-delete-plan="${plan.id}" aria-label="Delete plan">×</button></div></article>`).join("") : "No plans saved yet."; }
+function collectDraftPlanExercises() {
+  const rows = [...document.querySelectorAll("#planExerciseRows .plan-exercise-row")];
+  const availableNames = dedupeExerciseNames([...exercises, ...favourites, ...plans.flatMap(plan => normalizePlanExercises(plan.exercises).map(item => item.exercise))]);
+  const result = rows.map((row, index) => ({ exercise: canonicalExerciseName(row.querySelector("[data-plan-exercise-name]").value, availableNames), targetSets: Number(row.querySelector("[data-plan-target-sets]").value), index }));
+  const invalid = result.find(item => !item.exercise || !Number.isInteger(item.targetSets) || item.targetSets < 1);
+  if (invalid) { showToast("Every plan exercise needs a name and at least 1 whole-number set.", "error"); return null; }
+  if (new Set(result.map(item => exerciseKey(item.exercise))).size !== result.length) { showToast("Each exercise can appear only once in a plan.", "error"); return null; }
+  draftPlanExercises = result.map(({ exercise, targetSets }) => ({ exercise, targetSets }));
+  return draftPlanExercises;
+}
+function renderPlanExerciseRows() {
+  const list = document.querySelector("#planExerciseRows");
+  list.classList.toggle("empty-state", !draftPlanExercises.length);
+  list.innerHTML = draftPlanExercises.length ? draftPlanExercises.map((item, index) => `<div class="plan-exercise-row"><span class="set-number">${index + 1}</span><label>Exercise<input data-plan-exercise-name="${index}" value="${escapeHTML(item.exercise)}"></label><label>Sets<input data-plan-target-sets="${index}" type="number" min="1" step="1" inputmode="numeric" value="${item.targetSets}"></label><button class="icon-btn" data-remove-plan-exercise="${index}" aria-label="Remove ${escapeHTML(item.exercise)}">×</button></div>`).join("") : "Add exercises to build this workout.";
+}
+function addPlanExercise() {
+  if (!requireAuthenticatedUser()) return;
+  if (collectDraftPlanExercises() === null) return;
+  const availableNames = dedupeExerciseNames([...exercises, ...favourites, ...plans.flatMap(plan => normalizePlanExercises(plan.exercises).map(item => item.exercise)), ...draftPlanExercises.map(item => item.exercise)]);
+  const exercise = canonicalExerciseName(document.querySelector("#planExerciseName").value, availableNames);
+  const targetSets = Number(document.querySelector("#planExerciseSets").value);
+  if (!exercise || !Number.isInteger(targetSets) || targetSets < 1) return showToast("Choose an exercise and enter at least 1 whole-number set.", "error");
+  if (draftPlanExercises.some(item => sameExercise(item.exercise, exercise))) return showToast(`${exercise} is already in this plan.`, "error");
+  draftPlanExercises.push({ exercise, targetSets });
+  document.querySelector("#planExerciseName").value = ""; document.querySelector("#planExerciseSets").value = "3";
+  renderPlanExerciseRows(); document.querySelector("#planExerciseName").focus();
+}
+function removePlanExercise(index) { if (collectDraftPlanExercises() === null) return; draftPlanExercises.splice(index, 1); renderPlanExerciseRows(); }
+function editPlan(id) { const plan = plans.find(item => item.id === id); if (!plan) return; editingPlanId = id; draftPlanExercises = normalizePlanExercises(plan.exercises); document.querySelector("#planName").value = plan.name; renderPlanExerciseRows(); document.querySelector("#planFormTitle").textContent = "Edit plan"; document.querySelector("#savePlan").textContent = "Update plan"; document.querySelector("#cancelPlanEdit").classList.remove("hidden"); }
+function cancelPlanEdit() { editingPlanId = null; draftPlanExercises = []; document.querySelector("#planName").value = ""; document.querySelector("#planExerciseName").value = ""; document.querySelector("#planExerciseSets").value = "3"; renderPlanExerciseRows(); document.querySelector("#planFormTitle").textContent = "Create a plan"; document.querySelector("#savePlan").textContent = "Save plan"; document.querySelector("#cancelPlanEdit").classList.add("hidden"); }
+function planTimestampInfo(plan) { const created = plan.createdAt ? new Date(plan.createdAt) : new Date(NaN); const updated = plan.updatedAt ? new Date(plan.updatedAt) : new Date(NaN); const hasCreated = Number.isFinite(created.getTime()); const hasUpdated = Number.isFinite(updated.getTime()); if (!hasCreated && !hasUpdated) return null; const edited = hasUpdated && (!hasCreated || updated.getTime() > created.getTime() + 1000); const date = edited ? updated : created; return { label: edited ? "Updated" : "Created", date, time: date.getTime() }; }
+function formatPlanTimestamp(plan) { const info = planTimestampInfo(plan); if (!info) return ""; const formatted = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(info.date); return `${info.label}: ${formatted.replace(/, (?=\d{1,2}:)/, " • ")}`; }
+function renderPlans() { const list = document.querySelector("#plansList"); const displayPlans = [...plans].sort((left, right) => (planTimestampInfo(right)?.time || 0) - (planTimestampInfo(left)?.time || 0)); list.classList.toggle("empty-state", !plans.length); list.innerHTML = plans.length ? displayPlans.map(plan => { const planExercises = normalizePlanExercises(plan.exercises); const timestamp = formatPlanTimestamp(plan); return `<article class="plan-card"><p class="eyebrow">${planExercises.length} EXERCISES · ${planExercises.reduce((sum, item) => sum + item.targetSets, 0)} SETS</p><h3>${escapeHTML(plan.name)}</h3>${timestamp ? `<p class="plan-timestamp">${escapeHTML(timestamp)}</p>` : ""}<ul>${planExercises.map(item => `<li><span>${escapeHTML(item.exercise)}</span><strong>${item.targetSets} set${item.targetSets === 1 ? "" : "s"}</strong></li>`).join("")}</ul><div class="plan-card-actions"><button class="btn btn-primary" data-start-plan="${plan.id}">Start plan</button><button class="btn btn-ghost" data-edit-plan="${plan.id}">Edit</button><button class="icon-btn" data-delete-plan="${plan.id}" aria-label="Delete plan">×</button></div></article>`; }).join("") : "No plans saved yet."; }
 
 async function deletePlan(id) {
   if (!requireAuthenticatedUser()) return;
@@ -515,25 +649,26 @@ function requestPlanDeletion(id) { askConfirmation("Delete this workout plan? Th
 async function toggleFavourite() {
   if (!requireAuthenticatedUser()) return;
   const exercise = document.querySelector("#exerciseSelect").value;
-  const isFavourite = favourites.includes(exercise);
+  const isFavourite = favourites.some(item => sameExercise(item, exercise));
   const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
   if (userError || !user) return showToast(userError?.message || "Your session expired. Sign in again before updating favourites.", "error");
   const query = isFavourite
-    ? supabaseClient.from("favourite_exercises").delete().eq("exercise", exercise)
-    : supabaseClient.from("favourite_exercises").insert({ user_id: user.id, exercise });
+    ? supabaseClient.from("favourite_exercises").delete().ilike("exercise", exercise)
+    : supabaseClient.from("favourite_exercises").insert({ user_id: user.id, exercise: canonicalExerciseName(exercise, exercises) });
   const { error } = await query;
   if (error) return showToast(`Favourite was not updated: ${error.message}`, "error");
   const refreshed = await loadSupabaseFavourites({ quiet: true });
   showToast(refreshed ? (isFavourite ? "Removed from favourites" : "Added to favourites") : "Favourite changed, but favourites could not be refreshed.", refreshed ? "success" : "error");
 }
-function renderFavourites() { const selected = document.querySelector("#exerciseSelect").value; renderExerciseSelectors(); const activeExercise = document.querySelector("#exerciseSelect").value || selected; document.querySelector("#toggleFavourite").classList.toggle("active", favourites.includes(activeExercise)); document.querySelector("#toggleFavourite").textContent = favourites.includes(activeExercise) ? "★" : "☆"; document.querySelector("#favouriteChips").innerHTML = favourites.map(item => `<button class="chip" data-favourite="${escapeHTML(item)}">★ ${escapeHTML(item)}</button>`).join(""); }
+function renderFavourites() { const selected = document.querySelector("#exerciseSelect").value; renderExerciseSelectors(); const activeExercise = document.querySelector("#exerciseSelect").value || selected; const active = favourites.some(item => sameExercise(item, activeExercise)); document.querySelector("#toggleFavourite").classList.toggle("active", active); document.querySelector("#toggleFavourite").textContent = active ? "★" : "☆"; document.querySelector("#favouriteChips").innerHTML = dedupeExerciseNames(favourites).map(item => `<button class="chip" data-favourite="${escapeHTML(item)}">★ ${escapeHTML(item)}</button>`).join(""); }
 
-function renderAnalytics() { const allSets = workoutHistory.flatMap(workout => workout.sets); document.querySelector("#analyticsWorkouts").textContent = workoutHistory.length; document.querySelector("#analyticsSets").textContent = allSets.length; document.querySelector("#analyticsVolume").textContent = `${formatNumber(workoutHistory.reduce((sum, workout) => sum + workoutVolume(workout), 0))} kg`; const best = Math.max(0, ...allSets.map(set => epley(set.weight, set.reps))); document.querySelector("#analytics1rm").textContent = best ? `${formatNumber(best)} kg` : "—"; const recent = workoutHistory.slice(0, 7).reverse(); const chart = document.querySelector("#volumeChart"); chart.classList.toggle("empty-state", !recent.length); const max = Math.max(1, ...recent.map(workoutVolume)); chart.innerHTML = recent.length ? recent.map(item => `<div class="bar-wrap" title="${formatNumber(workoutVolume(item))} kg"><span class="bar" style="height:${Math.max(3, workoutVolume(item) / max * 90)}%"></span><small>${new Date(item.finishedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</small></div>`).join("") : "Finish a workout to see your volume trend."; const grouped = {}; allSets.forEach(set => { grouped[set.exercise] ??= { sets: 0, volume: 0, best: 0 }; grouped[set.exercise].sets++; grouped[set.exercise].volume += set.weight * set.reps; grouped[set.exercise].best = Math.max(grouped[set.exercise].best, epley(set.weight, set.reps)); }); const stats = document.querySelector("#exerciseStats"); const entries = Object.entries(grouped).sort((a, b) => b[1].volume - a[1].volume); stats.classList.toggle("empty-state", !entries.length); stats.innerHTML = entries.length ? entries.map(([name, data]) => `<div class="stat-row"><div><strong>${escapeHTML(name)}</strong><small>${data.sets} sets</small></div><div><strong>${formatNumber(data.volume)} kg</strong><small>volume</small></div><div><strong>${formatNumber(data.best)} kg</strong><small>best 1RM</small></div></div>`).join("") : "Exercise insights will appear here."; }
+function renderAnalytics() { const allSets = workoutHistory.flatMap(workout => workout.sets); document.querySelector("#analyticsWorkouts").textContent = workoutHistory.length; document.querySelector("#analyticsSets").textContent = allSets.length; document.querySelector("#analyticsVolume").textContent = `${formatNumber(workoutHistory.reduce((sum, workout) => sum + workoutVolume(workout), 0))} kg`; const best = Math.max(0, ...allSets.map(set => epley(set.weight, set.reps))); document.querySelector("#analytics1rm").textContent = best ? `${formatNumber(best)} kg` : "—"; const recent = workoutHistory.slice(0, 7).reverse(); const chart = document.querySelector("#volumeChart"); chart.classList.toggle("empty-state", !recent.length); const max = Math.max(1, ...recent.map(workoutVolume)); chart.innerHTML = recent.length ? recent.map(item => `<div class="bar-wrap" title="${formatNumber(workoutVolume(item))} kg"><span class="bar" style="height:${Math.max(3, workoutVolume(item) / max * 90)}%"></span><small>${new Date(item.finishedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</small></div>`).join("") : "Finish a workout to see your volume trend."; const grouped = {}; allSets.forEach(set => { const exercise = canonicalExerciseName(set.exercise, Object.keys(grouped)); grouped[exercise] ??= { sets: 0, volume: 0, best: 0 }; grouped[exercise].sets++; grouped[exercise].volume += set.weight * set.reps; grouped[exercise].best = Math.max(grouped[exercise].best, epley(set.weight, set.reps)); }); const stats = document.querySelector("#exerciseStats"); const entries = Object.entries(grouped).sort((a, b) => b[1].volume - a[1].volume); stats.classList.toggle("empty-state", !entries.length); stats.innerHTML = entries.length ? entries.map(([name, data]) => `<div class="stat-row"><div><strong>${escapeHTML(name)}</strong><small>${data.sets} sets</small></div><div><strong>${formatNumber(data.volume)} kg</strong><small>volume</small></div><div><strong>${formatNumber(data.best)} kg</strong><small>best 1RM</small></div></div>`).join("") : "Exercise insights will appear here."; }
 function renderGuide() { const guide = formGuides[document.querySelector("#guideExercise").value] || defaultGuide; document.querySelector("#setupCues").innerHTML = guide.setup.map(item => `<li>${item}</li>`).join(""); document.querySelector("#executionCues").innerHTML = guide.execution.map(item => `<li>${item}</li>`).join(""); document.querySelector("#mistakeCues").innerHTML = guide.mistakes.map(item => `<li>${item}</li>`).join(""); }
 
-document.addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; if (button.closest("#appShell") && !requireAuthenticatedUser()) return; if (button.dataset.view) showView(button.dataset.view); if (button.dataset.go) showView(button.dataset.go); if (button.dataset.editSet) editSet(button.dataset.editSet); if (button.dataset.deleteSet) deleteSet(button.dataset.deleteSet); if (button.dataset.deleteFood) deleteFood(button.dataset.deleteFood); if (button.dataset.startPlan) startWorkout(plans.find(plan => plan.id === button.dataset.startPlan)); if (button.dataset.editPlan) editPlan(button.dataset.editPlan); if (button.dataset.deletePlan) requestPlanDeletion(button.dataset.deletePlan); if (button.dataset.deleteWorkout) requestWorkoutDeletion(button.dataset.deleteWorkout); if (button.dataset.favourite) { document.querySelector("#exerciseSelect").value = button.dataset.favourite; renderFavourites(); } });
+document.addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; if (button.closest("#appShell") && !requireAuthenticatedUser()) return; if (button.dataset.view) showView(button.dataset.view); if (button.dataset.go) showView(button.dataset.go); if (button.dataset.editSet) editSet(button.dataset.editSet); if (button.dataset.deleteSet) deleteSet(button.dataset.deleteSet); if (button.dataset.completeSlot) completeStructuredSet(button.dataset.completeSlot, Number(button.dataset.exerciseIndex), Number(button.dataset.setIndex)); if (button.dataset.usePrevious) usePreviousSet(button.dataset.usePrevious, Number(button.dataset.exerciseIndex), Number(button.dataset.setIndex)); if (button.dataset.removePlanExercise) removePlanExercise(Number(button.dataset.removePlanExercise)); if (button.dataset.deleteFood) deleteFood(button.dataset.deleteFood); if (button.dataset.startPlan) startWorkout(plans.find(plan => plan.id === button.dataset.startPlan)); if (button.dataset.editPlan) editPlan(button.dataset.editPlan); if (button.dataset.deletePlan) requestPlanDeletion(button.dataset.deletePlan); if (button.dataset.deleteWorkout) requestWorkoutDeletion(button.dataset.deleteWorkout); if (button.dataset.favourite) { document.querySelector("#exerciseSelect").value = button.dataset.favourite; renderFavourites(); } });
+document.addEventListener("input", event => { if (!isAuthenticated()) return; if (event.target.matches("[data-slot-weight]")) saveStructuredDraft(event.target.dataset.slotWeight, "weight", event.target.value); if (event.target.matches("[data-slot-reps]")) saveStructuredDraft(event.target.dataset.slotReps, "reps", event.target.value); });
 document.querySelector("#mobileMenu").addEventListener("click", () => { if (requireAuthenticatedUser()) document.querySelector(".sidebar").classList.toggle("open"); });
-document.querySelector("#dashboardStart").addEventListener("click", () => startWorkout()); document.querySelector("#addSet").addEventListener("click", addSet); document.querySelector("#finishWorkout").addEventListener("click", finishWorkout); document.querySelector("#toggleFavourite").addEventListener("click", toggleFavourite); document.querySelector("#exerciseSelect").addEventListener("change", () => { if (requireAuthenticatedUser()) renderFavourites(); }); document.querySelector("#addFood").addEventListener("click", addFood); document.querySelector("#savePlan").addEventListener("click", savePlan); document.querySelector("#cancelPlanEdit").addEventListener("click", () => { if (requireAuthenticatedUser()) cancelPlanEdit(); }); document.querySelector("#guideExercise").addEventListener("change", () => { if (requireAuthenticatedUser()) renderGuide(); }); document.querySelector("#confirmCancel").addEventListener("click", closeConfirmation); document.querySelector("#confirmOkay").addEventListener("click", () => { if (confirmAction && requireAuthenticatedUser()) confirmAction(); });
+document.querySelector("#dashboardStart").addEventListener("click", () => startWorkout()); document.querySelector("#addSet").addEventListener("click", addSet); document.querySelector("#finishWorkout").addEventListener("click", finishWorkout); document.querySelector("#toggleFavourite").addEventListener("click", toggleFavourite); document.querySelector("#exerciseSelect").addEventListener("change", () => { if (requireAuthenticatedUser()) renderFavourites(); }); document.querySelector("#addFood").addEventListener("click", addFood); document.querySelector("#addPlanExercise").addEventListener("click", addPlanExercise); document.querySelector("#savePlan").addEventListener("click", savePlan); document.querySelector("#cancelPlanEdit").addEventListener("click", () => { if (requireAuthenticatedUser()) cancelPlanEdit(); }); document.querySelector("#guideExercise").addEventListener("change", () => { if (requireAuthenticatedUser()) renderGuide(); }); document.querySelector("#confirmCancel").addEventListener("click", closeConfirmation); document.querySelector("#confirmOkay").addEventListener("click", () => { if (confirmAction && requireAuthenticatedUser()) confirmAction(); });
 document.querySelector("#signUp").addEventListener("click", signUp); document.querySelector("#signIn").addEventListener("click", signIn); document.querySelector("#signOut").addEventListener("click", event => { event.stopPropagation(); signOut(); });
 document.querySelector("#accountButton").addEventListener("click", openAccountPanel); document.querySelector("#sidebarAccountButton").addEventListener("click", openAccountPanel); document.querySelector("#closeAccount").addEventListener("click", closeAccountPanel); document.querySelector("#closeAccountBackdrop").addEventListener("click", closeAccountPanel);
 document.querySelector("#closePrModal").addEventListener("click", closePersonalRecords);

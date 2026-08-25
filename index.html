@@ -60,12 +60,13 @@
 
       <section class="view" id="workoutView">
         <div class="section-intro"><div><p class="eyebrow">SESSION LOG</p><h2 id="workoutHeading">Today’s workout</h2><p id="workoutStarted">Add your first working set to begin.</p></div><button class="btn btn-dark" id="finishWorkout">Finish workout</button></div>
-        <article class="panel form-panel">
+        <article class="panel form-panel" id="freeWorkoutEntry">
           <div class="exercise-picker"><label for="exerciseSelect">Exercise</label><div class="input-with-action"><select id="exerciseSelect"></select><button id="toggleFavourite" class="star-btn" aria-label="Toggle favourite">☆</button></div><div id="favouriteChips" class="chips"></div></div>
           <div class="set-entry"><label>Weight (kg)<input type="number" id="weightInput" min="0" step="0.5" placeholder="80"></label><label>Reps<input type="number" id="repsInput" min="1" step="1" placeholder="8"></label><button class="btn btn-primary" id="addSet">Add set</button></div>
         </article>
+        <section id="structuredWorkout" class="structured-workout hidden" aria-label="Plan workout sets"></section>
         <div class="workout-summary"><div><span>Total sets</span><strong id="currentSets">0</strong></div><div><span>Volume</span><strong id="currentVolume">0 kg</strong></div><div><span>Best est. 1RM</span><strong id="current1rm">—</strong></div></div>
-        <article class="panel"><div class="panel-head"><h3>Current sets</h3><span class="status-pill" id="sessionPill">Waiting</span></div><div id="currentSetList" class="set-list empty-state">No sets logged yet.</div></article>
+        <article class="panel" id="currentSetsPanel"><div class="panel-head"><h3>Current sets</h3><span class="status-pill" id="sessionPill">Waiting</span></div><div id="currentSetList" class="set-list empty-state">No sets logged yet.</div></article>
         <article class="panel"><div class="panel-head"><div><p class="eyebrow">ARCHIVE</p><h3>Workout history</h3></div></div><div id="historyList" class="history-list empty-state">Completed workouts will be saved here.</div></article>
       </section>
 
@@ -81,7 +82,7 @@
       <section class="view" id="plansView">
         <div class="section-intro"><div><p class="eyebrow">PROGRAMMING</p><h2>Workout plans</h2><p>Build repeatable sessions that remove the guesswork.</p></div></div>
         <div class="plans-layout">
-          <article class="panel form-panel"><h3 id="planFormTitle">Create a plan</h3><label>Plan name<input id="planName" type="text" placeholder="Upper strength"></label><label>Exercises <small>One per line</small><textarea id="planExercises" rows="7" placeholder="Bench Press&#10;Barbell Row&#10;Overhead Press"></textarea></label><div class="button-row"><button class="btn btn-primary" id="savePlan">Save plan</button><button class="btn btn-ghost hidden" id="cancelPlanEdit">Cancel edit</button></div></article>
+          <article class="panel form-panel"><h3 id="planFormTitle">Create a plan</h3><label>Plan name<input id="planName" type="text" placeholder="Pull Day"></label><div class="plan-exercise-builder"><label>Exercise<input id="planExerciseName" type="text" list="exerciseOptions" placeholder="Lat Pulldown"></label><label>Sets<input id="planExerciseSets" type="number" min="1" step="1" value="3"></label><button class="btn btn-dark" id="addPlanExercise" type="button">Add exercise</button></div><datalist id="exerciseOptions"></datalist><div id="planExerciseRows" class="plan-exercise-rows empty-state">Add at least one exercise.</div><div class="button-row"><button class="btn btn-primary" id="savePlan">Save plan</button><button class="btn btn-ghost hidden" id="cancelPlanEdit">Cancel edit</button></div></article>
           <div id="plansList" class="plan-grid empty-state">No plans saved yet.</div>
         </div>
       </section>
