@@ -13,15 +13,15 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="icons/lifttrack-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/lifttrack-192.png">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
-  <section id="appLoading" class="auth-screen" aria-live="polite"><div class="auth-brand"><span>LT</span><strong>LiftTrack</strong></div><div class="loading-ring" aria-hidden="true"></div><h1 id="loadingTitle">Loading LiftTrack</h1><p>Checking your secure session…</p></section>
-  <section id="authGate" class="auth-screen hidden" aria-labelledby="authTitle"><div class="auth-card"><div class="auth-brand"><span>LT</span><strong>LiftTrack</strong></div><p class="eyebrow">TRAIN WITH INTENT</p><h1 id="authTitle">Your training, everywhere.</h1><p>Sign in to access your cloud workouts, records, plans, and progress.</p><div class="auth-form"><label>Email<input id="authEmail" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label><div class="button-row"><button class="btn btn-primary" id="signIn" type="button">Sign In</button><button class="btn btn-ghost" id="signUp" type="button">Create account</button></div></div></div></section>
+  <section id="appLoading" class="auth-screen" aria-live="polite"><div class="auth-brand"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span><strong>LiftTrack</strong></div><div class="loading-ring" aria-hidden="true"></div><h1 id="loadingTitle">Loading LiftTrack</h1><p>Checking your secure session…</p></section>
+  <section id="authGate" class="auth-screen hidden" aria-labelledby="authTitle"><div class="auth-card"><div class="auth-brand"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span><strong>LiftTrack</strong></div><p class="eyebrow">TRAIN WITH INTENT</p><h1 id="authTitle">Your training, everywhere.</h1><p>Sign in to access your cloud workouts, records, plans, and progress.</p><div class="auth-form"><label>Email<input id="authEmail" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></label><div class="button-row"><button class="btn btn-primary" id="signIn" type="button">Sign In</button><button class="btn btn-ghost" id="signUp" type="button">Create account</button></div></div></div></section>
   <div id="offlineBanner" class="offline-banner hidden" role="status">You’re offline. Cloud saves will not work until your connection returns.</div>
   <div class="app-shell hidden" id="appShell" aria-hidden="true" inert>
     <aside class="sidebar">
-      <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="LiftTrack home"><span>LT</span> LiftTrack</a>
+      <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="LiftTrack home"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span> LiftTrack</a>
       <nav class="nav" aria-label="Main navigation">
         <button class="nav-link active" data-view="dashboard"><span>⌂</span> Dashboard</button>
         <button class="nav-link" data-view="workout"><span>＋</span> Workout</button>
@@ -42,7 +42,7 @@
 
       <section class="view active" id="dashboardView">
         <div class="hero-card">
-          <div><p class="eyebrow light">READY WHEN YOU ARE</p><h2 id="greeting">Good morning.</h2><p>Small improvements stack up. Log today’s work and keep moving forward.</p></div>
+          <div class="hero-copy"><div class="hero-brand"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span><span>LIFTTRACK</span></div><p class="eyebrow light">READY WHEN YOU ARE</p><h2 id="greeting">Good morning.</h2><p id="heroMotivation">Small improvements stack up.</p></div>
           <button class="btn btn-light" id="dashboardStart">Start workout <span>→</span></button>
           <div class="hero-orb"></div>
         </div>
@@ -61,7 +61,7 @@
       <section class="view" id="workoutView">
         <div class="section-intro"><div><p class="eyebrow">SESSION LOG</p><h2 id="workoutHeading">Today’s workout</h2><p id="workoutStarted">Add your first working set to begin.</p></div><button class="btn btn-dark" id="finishWorkout">Finish workout</button></div>
         <article class="panel form-panel" id="freeWorkoutEntry">
-          <div class="exercise-picker"><label for="exerciseSelect">Exercise</label><div class="input-with-action"><select id="exerciseSelect"></select><button id="toggleFavourite" class="star-btn" aria-label="Toggle favourite">☆</button></div><div id="favouriteChips" class="chips"></div></div>
+          <div class="exercise-picker"><label>Exercise</label><div class="input-with-action"><button id="exercisePickerButton" class="exercise-picker-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span id="exercisePickerValue">Choose exercise</span><span aria-hidden="true">⌄</span></button><button id="toggleFavourite" class="star-btn" aria-label="Toggle favourite">☆</button></div><div id="exercisePickerPanel" class="exercise-browser hidden"><label for="exerciseSearch" class="sr-only">Search exercises</label><input id="exerciseSearch" type="search" autocomplete="off" placeholder="Search exercises or categories…"><div id="workoutExerciseResults" class="exercise-results" role="listbox" aria-label="Exercises"></div></div><select id="exerciseSelect" class="sr-only" aria-hidden="true" tabindex="-1"></select><div id="favouriteChips" class="chips"></div></div>
           <div class="set-entry"><label>Weight (kg)<input type="number" id="weightInput" min="0" step="0.5" placeholder="80"></label><label>Reps<input type="number" id="repsInput" min="1" step="1" placeholder="8"></label><button class="btn btn-primary" id="addSet">Add set</button></div>
         </article>
         <section id="structuredWorkout" class="structured-workout hidden" aria-label="Plan workout sets"></section>
@@ -82,7 +82,7 @@
       <section class="view" id="plansView">
         <div class="section-intro"><div><p class="eyebrow">PROGRAMMING</p><h2>Workout plans</h2><p>Build repeatable sessions that remove the guesswork.</p></div></div>
         <div class="plans-layout">
-          <article class="panel form-panel"><h3 id="planFormTitle">Create a plan</h3><label>Plan name<input id="planName" type="text" placeholder="Pull Day"></label><div class="plan-exercise-builder"><label>Exercise<input id="planExerciseName" type="text" list="exerciseOptions" placeholder="Lat Pulldown"></label><label>Sets<input id="planExerciseSets" type="number" min="1" step="1" value="3"></label><button class="btn btn-dark" id="addPlanExercise" type="button">Add exercise</button></div><datalist id="exerciseOptions"></datalist><div id="planExerciseRows" class="plan-exercise-rows empty-state">Add at least one exercise.</div><div class="button-row"><button class="btn btn-primary" id="savePlan">Save plan</button><button class="btn btn-ghost hidden" id="cancelPlanEdit">Cancel edit</button></div></article>
+          <article class="panel form-panel"><h3 id="planFormTitle">Create a plan</h3><label>Plan name<input id="planName" type="text" placeholder="Pull Day"></label><div class="plan-exercise-builder"><label class="plan-exercise-picker">Exercise<input id="planExerciseName" type="search" autocomplete="off" placeholder="Search exercises…"><div id="planExerciseResults" class="exercise-browser exercise-results hidden" role="listbox" aria-label="Plan exercises"></div></label><label>Sets<input id="planExerciseSets" type="number" min="1" step="1" value="3"></label><button class="btn btn-dark" id="addPlanExercise" type="button">Add exercise</button></div><datalist id="exerciseOptions"></datalist><div id="planExerciseRows" class="plan-exercise-rows empty-state">Add at least one exercise.</div><div class="button-row"><button class="btn btn-primary" id="savePlan">Save plan</button><button class="btn btn-ghost hidden" id="cancelPlanEdit">Cancel edit</button></div></article>
           <div id="plansList" class="plan-grid empty-state">No plans saved yet.</div>
         </div>
       </section>
@@ -96,8 +96,9 @@
       </section>
 
       <section class="view" id="guideView">
-        <div class="section-intro"><div><p class="eyebrow">MOVE BETTER</p><h2>Exercise form guide</h2><p>Simple cues for strong, repeatable technique.</p></div><label class="guide-select">Choose exercise<select id="guideExercise"></select></label></div>
-        <div class="guide-grid"><article class="panel guide-card"><span class="step-number">01</span><h3>Setup</h3><ul id="setupCues"></ul></article><article class="panel guide-card"><span class="step-number">02</span><h3>Execution</h3><ul id="executionCues"></ul></article><article class="panel guide-card warning"><span class="step-number">!</span><h3>Common mistakes</h3><ul id="mistakeCues"></ul></article></div>
+        <div class="section-intro"><div><p class="eyebrow">MOVE BETTER</p><h2>Exercise form guide</h2><p>Simple cues for strong, repeatable technique.</p></div><div class="guide-actions"><button id="backToWorkout" class="btn btn-ghost hidden" type="button">← Back to workout</button><label class="guide-select">Choose exercise<select id="guideExercise"></select></label></div></div>
+        <article class="guide-overview panel"><div><p class="eyebrow">EXERCISE PROFILE</p><h3 id="guideName">Exercise</h3></div><dl><div><dt>Primary muscles</dt><dd id="guideMuscles">—</dd></div><div><dt>Secondary muscles</dt><dd id="guideSecondary">—</dd></div><div><dt>Equipment</dt><dd id="guideEquipment">—</dd></div><div><dt>Difficulty</dt><dd id="guideDifficulty">—</dd></div></dl><p id="guideComingSoon" class="guide-coming-soon hidden">Detailed form guide coming soon.</p></article>
+        <div class="guide-grid"><article class="panel guide-card"><span class="step-number">01</span><h3>Setup</h3><ul id="setupCues"></ul></article><article class="panel guide-card"><span class="step-number">02</span><h3>Execution</h3><ul id="executionCues"></ul></article><article class="panel guide-card"><span class="step-number">03</span><h3>Breathing</h3><ul id="breathingCues"></ul></article><article class="panel guide-card warning"><span class="step-number">!</span><h3>Common mistakes</h3><ul id="mistakeCues"></ul></article><article class="panel guide-card safety"><span class="step-number">✓</span><h3>Safety tip</h3><ul id="safetyCues"></ul></article></div>
         <article class="video-placeholder"><div class="play-icon">▶</div><div><span class="coming-soon">COMING SOON</span><h3>AI form video analysis</h3><p>Upload a set and receive personalized movement feedback.</p></div></article>
       </section>
     </main>
@@ -106,7 +107,8 @@
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <div id="confirmModal" class="modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal-icon">!</div><h3 id="confirmTitle">Are you sure?</h3><p id="confirmMessage"></p><div class="button-row"><button class="btn btn-ghost" id="confirmCancel">Cancel</button><button class="btn btn-danger" id="confirmOkay">Delete</button></div></div></div>
   <div id="prModal" class="modal pr-modal" aria-hidden="true"><div class="modal-card pr-modal-card" role="dialog" aria-modal="true" aria-labelledby="prTitle"><div class="pr-flame" aria-hidden="true">🔥</div><p class="eyebrow">PERSONAL BEST</p><h3 id="prTitle">NEW PR</h3><div id="prResults" class="pr-results"></div><button class="btn btn-primary" id="closePrModal" type="button">Celebrate &amp; continue</button></div></div>
+  <div id="duplicatePlanModal" class="modal" aria-hidden="true"><div class="modal-card duplicate-plan-card" role="dialog" aria-modal="true" aria-labelledby="duplicatePlanTitle"><div class="modal-icon">≋</div><h3 id="duplicatePlanTitle">Plan already exists</h3><p id="duplicatePlanMessage"></p><div class="duplicate-actions"><button class="btn btn-ghost" id="duplicateCancel">Cancel</button><button class="btn btn-ghost" id="duplicateCreate">Create anyway</button><button class="btn btn-primary" id="duplicateUpdate">Update existing</button></div></div></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=4"></script>
+  <script src="script.js?v=7"></script>
 </body>
 </html>
