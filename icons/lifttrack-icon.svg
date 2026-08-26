@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LiftTrack">
-  <rect width="512" height="512" rx="112" fill="#171a16"/>
-  <circle cx="256" cy="256" r="174" fill="none" stroke="#a8ec46" stroke-width="18" opacity=".16"/>
-  <path d="M112 222h54v68h-54zm234 0h54v68h-54zM166 244h180v24H166z" fill="#a8ec46"/>
-  <path d="M138 193h28v126h-28zm208 0h28v126h-28z" fill="#f3f1eb"/>
-  <text x="256" y="386" text-anchor="middle" fill="#f3f1eb" font-family="system-ui,sans-serif" font-size="62" font-weight="800">LT</text>
+  <rect id="background" width="512" height="512" rx="112" fill="#a8ec46"/>
+  <g id="monogram" fill="none" stroke="#171a16" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="156" y1="132" x2="156" y2="274"/>
+    <line x1="156" y1="274" x2="226" y2="274"/>
+    <line x1="264" y1="132" x2="364" y2="132"/>
+    <line x1="314" y1="132" x2="314" y2="274"/>
+  </g>
+  <g id="barbell" fill="none" stroke="#171a16" stroke-width="22" stroke-linecap="round">
+    <line x1="150" y1="354" x2="362" y2="354"/>
+    <line x1="126" y1="324" x2="126" y2="384" stroke-width="30"/>
+    <line x1="386" y1="324" x2="386" y2="384" stroke-width="30"/>
+  </g>
 </svg>

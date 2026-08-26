@@ -1,7 +1,7 @@
 "use strict";
 
-const CACHE_NAME = "lifttrack-shell-v7";
-const APP_SHELL = ["/", "/index.html", "/style.css?v=7", "/script.js?v=7", "/manifest.webmanifest", "/icons/lifttrack-192.png", "/icons/lifttrack-512.png", "/icons/lifttrack-maskable-512.png"];
+const CACHE_NAME = "lifttrack-shell-v8";
+const APP_SHELL = ["/", "/index.html", "/style.css?v=8", "/script.js?v=7", "/manifest.webmanifest", "/icons/lifttrack-icon.svg", "/icons/lifttrack-192.png", "/icons/lifttrack-512.png", "/icons/lifttrack-maskable-512.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
