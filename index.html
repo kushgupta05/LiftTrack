@@ -13,7 +13,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="icons/lifttrack-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/lifttrack-192.png">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <section id="appLoading" class="auth-screen" aria-live="polite"><div class="auth-brand"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span><strong>LiftTrack</strong></div><div class="loading-ring" aria-hidden="true"></div><h1 id="loadingTitle">Loading LiftTrack</h1><p>Checking your secure session…</p></section>
@@ -29,6 +29,8 @@
         <button class="nav-link" data-view="plans"><span>☷</span> Plans</button>
         <button class="nav-link" data-view="analytics"><span>↗</span> Analytics</button>
         <button class="nav-link" data-view="guide"><span>◎</span> Form guide</button>
+        <button class="nav-link" data-view="aiCoach"><span>✦</span> AI Coach</button>
+        <button class="nav-link" data-view="settings"><span>⚙</span> Fitness profile</button>
       </nav>
       <button class="sidebar-account" id="sidebarAccountButton" type="button"><span class="pulse-dot"></span><span><strong>My account</strong><small id="sidebarAccountEmail">Signed in</small></span></button>
     </aside>
@@ -48,7 +50,7 @@
         </div>
         <div class="metric-grid dashboard-metrics">
           <article class="metric-card"><div class="metric-icon">↗</div><p>Workout status</p><strong id="dashWorkoutStatus">Not started</strong><small id="dashWorkoutDetail">Ready for your next session</small></article>
-          <article class="metric-card"><div class="metric-icon">◒</div><p>Protein today</p><strong><span id="dashProtein">0</span><em> / 160g</em></strong><div class="mini-track"><span id="dashProteinBar"></span></div></article>
+          <article class="metric-card"><div class="metric-icon">◒</div><p>Protein today</p><strong><span id="dashProtein">0</span><em> / —g</em></strong><div class="mini-track"><span id="dashProteinBar"></span></div></article>
           <article class="metric-card"><div class="metric-icon">◆</div><p>Best estimated 1RM</p><strong id="dashBest1rm">—</strong><small id="dashBestExercise">Log sets to establish a best</small></article>
           <article class="metric-card streak-card" id="streakCard"><div class="metric-icon">🔥</div><p>Workout streak</p><strong><span id="currentStreak">0</span><em id="currentStreakUnit"> days</em></strong><small>Best streak: <span id="bestStreakText">0 days</span></small></article>
         </div>
@@ -64,6 +66,7 @@
           <div class="exercise-picker"><label>Exercise</label><div class="input-with-action"><button id="exercisePickerButton" class="exercise-picker-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span id="exercisePickerValue">Choose exercise</span><span aria-hidden="true">⌄</span></button><button id="toggleFavourite" class="star-btn" aria-label="Toggle favourite">☆</button></div><div id="exercisePickerPanel" class="exercise-browser hidden"><label for="exerciseSearch" class="sr-only">Search exercises</label><input id="exerciseSearch" type="search" autocomplete="off" placeholder="Search exercises or categories…"><div id="workoutExerciseResults" class="exercise-results" role="listbox" aria-label="Exercises"></div></div><select id="exerciseSelect" class="sr-only" aria-hidden="true" tabindex="-1"></select><div id="favouriteChips" class="chips"></div></div>
           <div class="set-entry"><label>Weight (kg)<input type="number" id="weightInput" min="0" step="0.5" placeholder="80"></label><label>Reps<input type="number" id="repsInput" min="1" step="1" placeholder="8"></label><button class="btn btn-primary" id="addSet">Add set</button></div>
         </article>
+        <article id="workoutWarmup" class="panel warmup-card hidden"></article>
         <section id="structuredWorkout" class="structured-workout hidden" aria-label="Plan workout sets"></section>
         <div class="workout-summary"><div><span>Total sets</span><strong id="currentSets">0</strong></div><div><span>Volume</span><strong id="currentVolume">0 kg</strong></div><div><span>Best est. 1RM</span><strong id="current1rm">—</strong></div></div>
         <article class="panel" id="currentSetsPanel"><div class="panel-head"><h3>Current sets</h3><span class="status-pill" id="sessionPill">Waiting</span></div><div id="currentSetList" class="set-list empty-state">No sets logged yet.</div></article>
@@ -71,12 +74,20 @@
       </section>
 
       <section class="view" id="nutritionView">
-        <div class="section-intro"><div><p class="eyebrow">DAILY FUEL</p><h2>Protein tracker</h2><p>Fuel recovery one meal at a time.</p></div></div>
+        <div class="section-intro"><div><p class="eyebrow">TODAY'S NUTRITION</p><h2>Daily fuel</h2><p id="nutritionStatus">Fuel recovery one meal at a time.</p></div><button class="btn btn-ghost" data-go="settings">Fitness profile</button></div>
+        <article class="panel nutrition-progress-card"><div><p>Protein</p><strong><span id="nutritionProteinCurrent">0</span> / <span id="nutritionProteinTarget">—</span> g</strong><small id="nutritionRemaining">Loading target…</small></div><div class="nutrition-progress-track"><span id="nutritionProgressBar"></span></div><div><p>Calories logged</p><strong id="nutritionCalories">0 kcal</strong></div></article>
         <div class="nutrition-layout">
-          <article class="protein-card"><div class="protein-ring" id="proteinRing"><div><strong id="proteinTotal">0g</strong><span>of 160g</span></div></div><h3>Daily protein</h3><p id="proteinMessage">Add food to start tracking.</p></article>
-          <article class="panel form-panel"><h3>Add food</h3><div class="nutrition-form"><label>Food name<input id="foodName" type="text" placeholder="Greek yoghurt"></label><label>Protein / serving (g)<input id="foodProtein" type="number" min="0.1" step="0.1" placeholder="20"></label><label>Quantity<input id="foodQuantity" type="number" min="0.1" step="0.1" value="1"></label><button class="btn btn-primary" id="addFood">Add food</button></div></article>
+          <article class="protein-card"><div class="protein-ring" id="proteinRing"><div><strong id="proteinTotal">0g</strong><span id="proteinTargetLabel">Loading target…</span></div></div><h3>Daily protein</h3><p id="proteinMessage">Add food to start tracking.</p></article>
+          <article class="panel form-panel"><h3>Add meal</h3><div class="nutrition-form"><label>Food / meal name<input id="foodName" type="text" placeholder="Chicken breast"></label><label>Protein (g)<input id="foodProtein" type="number" min="0.1" step="0.1" inputmode="decimal" placeholder="35"></label><label>Calories (optional)<input id="foodCalories" type="number" min="0" step="1" inputmode="numeric" placeholder="220"></label><label>Quantity<input id="foodQuantity" type="number" min="0.1" step="0.1" inputmode="decimal" value="1"></label><button class="btn btn-primary" id="addFood">Add meal</button></div></article>
         </div>
         <article class="panel"><div class="panel-head"><h3>Today’s foods</h3><span id="foodCount" class="status-pill">0 items</span></div><div id="foodList" class="food-list empty-state">No foods logged today.</div></article>
+        <article class="panel nutrition-history-panel"><div class="panel-head"><div><p class="eyebrow">RECENT DAYS</p><h3>Meal history</h3></div></div><div id="nutritionHistory" class="nutrition-history empty-state">Recent meals will appear here.</div></article>
+        <article class="panel photo-meal-card"><div><p class="eyebrow">PHOTO MEAL ESTIMATE</p><h3>Estimate a meal from a photo</h3><p>Future versions can securely send a meal photo to a nutrition service and return estimated protein and calories for your confirmation.</p></div><button class="btn btn-ghost" id="photoMealButton" type="button">Upload food photo</button><span>Experimental — coming soon</span></article>
+      </section>
+
+      <section class="view" id="settingsView">
+        <div class="section-intro"><div><p class="eyebrow">FITNESS PROFILE</p><h2>Your daily targets</h2><p>Simple settings for more useful nutrition guidance.</p></div></div>
+        <div class="settings-layout"><article class="panel form-panel"><h3>Profile</h3><label>Body weight (kg)<input id="profileWeight" type="number" min="20" max="400" step="0.1" inputmode="decimal" placeholder="60"></label><label>Goal<select id="profileGoal"><option value="build">Build Muscle</option><option value="maintain">Maintain</option><option value="fat_loss">Fat Loss</option></select></label><div class="suggested-target"><span>Suggested target</span><strong id="suggestedProtein">—</strong><small>General fitness guidance, not a medically exact prescription.</small></div><label>Daily protein override (optional)<input id="profileProteinOverride" type="number" min="20" max="500" step="1" inputmode="numeric" placeholder="Use suggested target"></label><button class="btn btn-primary" id="saveProfile" type="button">Save profile</button></article><article class="panel"><div class="panel-head"><div><p class="eyebrow">BODY WEIGHT</p><h3>Weight log</h3></div></div><div class="weight-metrics"><div><span>Current</span><strong id="currentWeight">—</strong></div><div><span>Previous</span><strong id="previousWeight">—</strong></div><div><span>Change</span><strong id="weightChange">—</strong></div></div><div class="weight-entry"><label>Weight (kg)<input id="weightLogValue" type="number" min="20" max="400" step="0.1" inputmode="decimal" placeholder="60.4"></label><label>Date<input id="weightLogDate" type="date"></label><button class="btn btn-dark" id="logWeight" type="button">Log weight</button></div><div id="weightTrend" class="weight-trend empty-state">Log your weight regularly to see your trend.</div></article></div>
       </section>
 
       <section class="view" id="plansView">
@@ -101,6 +112,17 @@
         <div class="guide-grid"><article class="panel guide-card"><span class="step-number">01</span><h3>Setup</h3><ul id="setupCues"></ul></article><article class="panel guide-card"><span class="step-number">02</span><h3>Execution</h3><ul id="executionCues"></ul></article><article class="panel guide-card"><span class="step-number">03</span><h3>Breathing</h3><ul id="breathingCues"></ul></article><article class="panel guide-card warning"><span class="step-number">!</span><h3>Common mistakes</h3><ul id="mistakeCues"></ul></article><article class="panel guide-card safety"><span class="step-number">✓</span><h3>Safety tip</h3><ul id="safetyCues"></ul></article></div>
         <article class="video-placeholder"><div class="play-icon">▶</div><div><span class="coming-soon">COMING SOON</span><h3>AI form video analysis</h3><p>Upload a set and receive personalized movement feedback.</p></div></article>
       </section>
+
+      <section class="view" id="aiCoachView">
+        <div class="section-intro"><div><p class="eyebrow">LIFTTRACK AI</p><h2>AI Coach</h2><p>Ask about training, exercises, form and your workout.</p></div><button class="btn btn-ghost" id="clearAiCoach" type="button">New conversation</button></div>
+        <div class="ai-coach-layout"><article class="panel ai-coach-card" aria-labelledby="aiCoachConversationTitle">
+          <div class="panel-head"><div><p class="eyebrow">COACH CHAT</p><h3 id="aiCoachConversationTitle">Train with clarity</h3></div><span class="status-pill">General fitness guidance</span></div>
+          <div id="aiCoachMessages" class="ai-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+          <div id="aiCoachPrompts" class="ai-prompts" aria-label="Suggested questions"><button type="button" data-ai-prompt="Check my current workout">Check my current workout</button><button type="button" data-ai-prompt="Explain progressive overload">Explain progressive overload</button><button type="button" data-ai-prompt="How long should I rest?">How long should I rest?</button><button type="button" data-ai-prompt="Help with exercise form">Help with exercise form</button><button type="button" data-ai-prompt="What is a drop set?">What is a drop set?</button></div>
+          <form id="aiCoachForm" class="ai-composer"><label class="sr-only" for="aiCoachInput">Ask LiftTrack AI</label><textarea id="aiCoachInput" rows="2" maxlength="1500" placeholder="Ask LiftTrack AI…" aria-describedby="aiCoachInputHelp"></textarea><button class="btn btn-primary" id="aiCoachSend" type="submit">Send</button></form>
+          <div class="ai-composer-meta"><small id="aiCoachInputHelp">Up to 1,500 characters</small><small>Not medical advice</small></div>
+        </article></div>
+      </section>
     </main>
     <div id="accountPanel" class="account-panel hidden" aria-hidden="true"><button class="account-backdrop" id="closeAccountBackdrop" type="button" aria-label="Close account"></button><section class="account-card" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button class="icon-btn account-close" id="closeAccount" type="button" aria-label="Close account">×</button><p class="eyebrow">LIFTTRACK ACCOUNT</p><h2 id="accountTitle">Your account</h2><div class="account-identity"><span class="avatar" id="accountPanelInitials">LT</span><div><strong id="accountEmail">Signed in</strong><small>Supabase cloud account</small></div></div><button class="btn btn-danger account-signout" id="signOut" type="button">Sign Out</button></section></div>
   </div>
@@ -108,7 +130,7 @@
   <div id="confirmModal" class="modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal-icon">!</div><h3 id="confirmTitle">Are you sure?</h3><p id="confirmMessage"></p><div class="button-row"><button class="btn btn-ghost" id="confirmCancel">Cancel</button><button class="btn btn-danger" id="confirmOkay">Delete</button></div></div></div>
   <div id="prModal" class="modal pr-modal" aria-hidden="true"><div class="modal-card pr-modal-card" role="dialog" aria-modal="true" aria-labelledby="prTitle"><div class="pr-flame" aria-hidden="true">🔥</div><p class="eyebrow">PERSONAL BEST</p><h3 id="prTitle">NEW PR</h3><div id="prResults" class="pr-results"></div><button class="btn btn-primary" id="closePrModal" type="button">Celebrate &amp; continue</button></div></div>
   <div id="duplicatePlanModal" class="modal" aria-hidden="true"><div class="modal-card duplicate-plan-card" role="dialog" aria-modal="true" aria-labelledby="duplicatePlanTitle"><div class="modal-icon">≋</div><h3 id="duplicatePlanTitle">Plan already exists</h3><p id="duplicatePlanMessage"></p><div class="duplicate-actions"><button class="btn btn-ghost" id="duplicateCancel">Cancel</button><button class="btn btn-ghost" id="duplicateCreate">Create anyway</button><button class="btn btn-primary" id="duplicateUpdate">Update existing</button></div></div></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=7"></script>
+  <div id="workoutSummaryModal" class="modal workout-summary-modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="workoutSummaryTitle"><p class="eyebrow">WORKOUT COMPLETE</p><h3 id="workoutSummaryTitle">Great work</h3><div id="workoutSummaryDetails" class="completion-summary"></div><button class="btn btn-primary" id="viewDashboard" type="button">View Dashboard</button></div></div>
+  <script src="script.js?v=18"></script>
 </body>
 </html>
