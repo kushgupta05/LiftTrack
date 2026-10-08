@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="LiftTrack — cloud workout, nutrition and strength tracking.">
+  <meta name="description" content="LiftTrack — workout, nutrition and strength tracking stored on your device.">
   <meta name="theme-color" content="#171a16">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,13 +13,11 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="icons/lifttrack-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/lifttrack-192.png">
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
-  <section id="appLoading" class="auth-screen" aria-live="polite"><div class="auth-brand"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span><strong>LiftTrack</strong></div><div class="loading-ring" aria-hidden="true"></div><h1 id="loadingTitle">Loading LiftTrack</h1><p>Checking your secure session…</p></section>
-  <section id="authGate" class="auth-screen hidden" aria-labelledby="authTitle"><div class="auth-card"><div class="auth-brand"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span><strong>LiftTrack</strong></div><p class="eyebrow">TRAIN WITH INTENT</p><h1 id="authTitle">Your training, everywhere.</h1><p>Your workouts and progress are protected by your Supabase session. Sign-in is unavailable in this interface.</p></div></section>
-  <div id="offlineBanner" class="offline-banner hidden" role="status">You’re offline. Cloud saves will not work until your connection returns.</div>
-  <div class="app-shell hidden" id="appShell" aria-hidden="true" inert>
+  <div id="offlineBanner" class="offline-banner hidden" role="status">You’re offline. Your data is saved on this device.</div>
+  <div class="app-shell" id="appShell" aria-hidden="false">
     <aside class="sidebar">
       <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="LiftTrack home"><span class="lt-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 14v20M4 14h8M4 34h14M20 12v24M16 12h20M32 12v24M28 36h8"/><path d="M14 24h20M10 20v8M38 20v8"/></svg></span> LiftTrack</a>
       <nav class="nav" aria-label="Main navigation">
@@ -32,14 +30,12 @@
         <button class="nav-link" data-view="aiCoach"><span>✦</span> AI Coach</button>
         <button class="nav-link" data-view="settings"><span>⚙</span> Fitness profile</button>
       </nav>
-      <button class="sidebar-account" id="sidebarAccountButton" type="button"><span class="pulse-dot"></span><span><strong>My account</strong><small id="sidebarAccountEmail">Signed in</small></span></button>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <button class="mobile-menu" id="mobileMenu" aria-label="Open menu">☰</button>
         <div><p class="eyebrow" id="todayLabel"></p><h1 id="pageTitle">Dashboard</h1></div>
-        <button class="account-button" id="accountButton" type="button" aria-label="Open account"><span class="avatar" id="accountInitials" aria-hidden="true">LT</span><span class="account-button-copy"><strong>Account</strong><small id="accountEmailShort">Signed in</small></span></button>
       </header>
 
       <section class="view active" id="dashboardView">
@@ -124,13 +120,12 @@
         </article></div>
       </section>
     </main>
-    <div id="accountPanel" class="account-panel hidden" aria-hidden="true"><button class="account-backdrop" id="closeAccountBackdrop" type="button" aria-label="Close account"></button><section class="account-card" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><button class="icon-btn account-close" id="closeAccount" type="button" aria-label="Close account">×</button><p class="eyebrow">LIFTTRACK ACCOUNT</p><h2 id="accountTitle">Your account</h2><div class="account-identity"><span class="avatar" id="accountPanelInitials">LT</span><div><strong id="accountEmail">Signed in</strong><small>Supabase cloud account</small></div></div><button class="btn btn-danger account-signout" id="signOut" type="button">Sign Out</button></section></div>
   </div>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <div id="confirmModal" class="modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal-icon">!</div><h3 id="confirmTitle">Are you sure?</h3><p id="confirmMessage"></p><div class="button-row"><button class="btn btn-ghost" id="confirmCancel">Cancel</button><button class="btn btn-danger" id="confirmOkay">Delete</button></div></div></div>
   <div id="prModal" class="modal pr-modal" aria-hidden="true"><div class="modal-card pr-modal-card" role="dialog" aria-modal="true" aria-labelledby="prTitle"><div class="pr-flame" aria-hidden="true">🔥</div><p class="eyebrow">PERSONAL BEST</p><h3 id="prTitle">NEW PR</h3><div id="prResults" class="pr-results"></div><button class="btn btn-primary" id="closePrModal" type="button">Celebrate &amp; continue</button></div></div>
   <div id="duplicatePlanModal" class="modal" aria-hidden="true"><div class="modal-card duplicate-plan-card" role="dialog" aria-modal="true" aria-labelledby="duplicatePlanTitle"><div class="modal-icon">≋</div><h3 id="duplicatePlanTitle">Plan already exists</h3><p id="duplicatePlanMessage"></p><div class="duplicate-actions"><button class="btn btn-ghost" id="duplicateCancel">Cancel</button><button class="btn btn-ghost" id="duplicateCreate">Create anyway</button><button class="btn btn-primary" id="duplicateUpdate">Update existing</button></div></div></div>
   <div id="workoutSummaryModal" class="modal workout-summary-modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="workoutSummaryTitle"><p class="eyebrow">WORKOUT COMPLETE</p><h3 id="workoutSummaryTitle">Great work</h3><div id="workoutSummaryDetails" class="completion-summary"></div><button class="btn btn-primary" id="viewDashboard" type="button">View Dashboard</button></div></div>
-  <script src="script.js?v=18"></script>
+  <script src="script.js?v=19"></script>
 </body>
 </html>

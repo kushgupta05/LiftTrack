@@ -10,7 +10,7 @@ const REQUEST_WINDOW_MS = 60_000;
 const REQUESTS_PER_WINDOW = 6;
 const MIN_REQUEST_INTERVAL_MS = 2_000;
 const OPENAI_TIMEOUT_MS = 22_000;
-const requestsByUser = new Map();
+const requestsByClient = new Map();
 
 const COACH_INSTRUCTIONS = `You are LiftTrack AI Coach, a concise fitness-training assistant integrated into a workout tracking application.
 Give practical, gym-focused guidance in short paragraphs or bullets suitable for a phone. Explain exercises, gym terminology, sensible progressive overload, rest, and supplied workout context clearly.
@@ -61,23 +61,15 @@ function sanitizeHistory(value) {
   return Array.isArray(value) ? value.slice(-HISTORY_MAX).map(item => ({ role: item?.role === "assistant" ? "assistant" : item?.role === "user" ? "user" : null, content: cleanText(item?.content, HISTORY_MESSAGE_MAX) })).filter(item => item.role && item.content) : [];
 }
 
-function rateLimited(userId, now = Date.now()) {
-  if (requestsByUser.size > 1000) for (const [id, record] of requestsByUser) if (now - record.windowStart > REQUEST_WINDOW_MS * 2) requestsByUser.delete(id);
-  const record = requestsByUser.get(userId);
-  if (!record || now - record.windowStart >= REQUEST_WINDOW_MS) { requestsByUser.set(userId, { windowStart: now, lastRequest: now, count: 1 }); return false; }
+function rateLimited(clientId, now = Date.now()) {
+  if (requestsByClient.size > 1000) for (const [id, record] of requestsByClient) if (now - record.windowStart > REQUEST_WINDOW_MS * 2) requestsByClient.delete(id);
+  const record = requestsByClient.get(clientId);
+  if (!record || now - record.windowStart >= REQUEST_WINDOW_MS) { requestsByClient.set(clientId, { windowStart: now, lastRequest: now, count: 1 }); return false; }
   if (now - record.lastRequest < MIN_REQUEST_INTERVAL_MS || record.count >= REQUESTS_PER_WINDOW) return true;
   record.lastRequest = now; record.count += 1; return false;
 }
 
-async function verifySupabaseUser(token) {
-  const url = process.env.SUPABASE_URL;
-  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !publishableKey) throw Object.assign(new Error("Server authentication is not configured."), { safeCode: "server_config" });
-  const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/user`, { headers: { apikey: publishableKey, Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
-  if (!response.ok) return null;
-  const user = await response.json();
-  return typeof user?.id === "string" ? user : null;
-}
+function getRateLimitKey(request) { const forwarded = request.headers["x-forwarded-for"]; const address = (Array.isArray(forwarded) ? forwarded[0] : String(forwarded || "").split(",")[0]).trim() || request.socket?.remoteAddress || "unknown"; return crypto.createHash("sha256").update(address).digest("hex"); }
 
 function extractOutputText(data) {
   if (typeof data?.output_text === "string") return data.output_text.trim();
@@ -89,9 +81,6 @@ module.exports = async function aiCoach(request, response) {
   if (request.method !== "POST") return json(response, 405, { error: "Method not allowed.", code: "method_not_allowed" });
   const contentLength = Number(request.headers["content-length"] || 0);
   if (contentLength > 16_000) return json(response, 413, { error: "Request is too large.", code: "payload_too_large" });
-  const authHeader = request.headers.authorization || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-  if (!token) return json(response, 401, { error: "Authentication required.", code: "unauthorized" });
   let body = request.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { return json(response, 400, { error: "Malformed request.", code: "malformed_request" }); } }
   if (!body || typeof body !== "object" || Array.isArray(body)) return json(response, 400, { error: "Malformed request.", code: "malformed_request" });
@@ -100,16 +89,15 @@ module.exports = async function aiCoach(request, response) {
   if (question.length > QUESTION_MAX) return json(response, 400, { error: `Question must be ${QUESTION_MAX} characters or fewer.`, code: "question_too_long" });
 
   try {
-    const user = await verifySupabaseUser(token);
-    if (!user) return json(response, 401, { error: "Your session is invalid or expired.", code: "unauthorized" });
-    if (rateLimited(user.id)) return json(response, 429, { error: "Please wait before asking another question.", code: "rate_limited" });
+    const clientId = getRateLimitKey(request);
+    if (rateLimited(clientId)) return json(response, 429, { error: "Please wait before asking another question.", code: "rate_limited" });
     if (!process.env.OPENAI_API_KEY) return json(response, 503, { error: "AI Coach is not configured.", code: "ai_not_configured" });
     const context = sanitizeContext(body.context);
     const history = sanitizeHistory(body.history);
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
     let openaiResponse;
     try {
-      openaiResponse = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-5-mini", instructions: COACH_INSTRUCTIONS, input: [...history, { role: "user", content: `Question:\n${question}\n\nLiftTrack context (may be empty):\n${JSON.stringify(context)}` }], max_output_tokens: 500, store: false, safety_identifier: crypto.createHash("sha256").update(user.id).digest("hex").slice(0, 64) }), signal: controller.signal });
+      openaiResponse = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-5-mini", instructions: COACH_INSTRUCTIONS, input: [...history, { role: "user", content: `Question:\n${question}\n\nLiftTrack context (may be empty):\n${JSON.stringify(context)}` }], max_output_tokens: 500, store: false, safety_identifier: crypto.createHash("sha256").update(clientId).digest("hex").slice(0, 64) }), signal: controller.signal });
     } finally { clearTimeout(timeout); }
     if (!openaiResponse.ok) { console.error("AI Coach provider request failed", { status: openaiResponse.status }); return json(response, 502, { error: "AI Coach is temporarily unavailable.", code: "provider_error" }); }
     const data = await openaiResponse.json(); const answer = extractOutputText(data);
@@ -121,4 +109,4 @@ module.exports = async function aiCoach(request, response) {
   }
 };
 
-module.exports._test = { sanitizeContext, sanitizeHistory, rateLimited, extractOutputText };
+module.exports._test = { sanitizeContext, sanitizeHistory, rateLimited, extractOutputText, getRateLimitKey };
