@@ -245,27 +245,6 @@ async function updateAuthUI(user) {
   }
 }
 
-async function signUp() {
-  if (!requireSupabaseConfig()) return;
-  const email = document.querySelector("#authEmail").value.trim();
-  const password = document.querySelector("#authPassword").value;
-  if (!email || !password) return showToast("Enter an email and password.", "error");
-  const { data, error } = await supabaseClient.auth.signUp({ email, password });
-  if (error) return showToast(error.message, "error");
-  showToast(data.session ? "Account created and signed in." : "Account created. Check your email to confirm it, then sign in.");
-}
-
-async function signIn() {
-  if (!requireSupabaseConfig()) return;
-  const email = document.querySelector("#authEmail").value.trim();
-  const password = document.querySelector("#authPassword").value;
-  if (!email || !password) return showToast("Enter an email and password.", "error");
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) return showToast(error.message, "error");
-  document.querySelector("#authPassword").value = "";
-  showToast("Signed in successfully.");
-}
-
 async function signOut() {
   if (!requireSupabaseConfig()) return;
   const signOutRequest = supabaseClient.auth.signOut();
@@ -970,12 +949,12 @@ document.querySelector("#exerciseSearch").addEventListener("input", event => { c
 document.querySelector("#planExerciseName").addEventListener("focus", event => { const panel = document.querySelector("#planExerciseResults"); panel.classList.remove("hidden"); renderExerciseBrowser(panel, dedupeExerciseNames([...favourites, ...exercises, ...plans.flatMap(plan => normalizePlanExercises(plan.exercises).map(item => item.exercise))]), event.target.value, "plan"); });
 document.querySelector("#planExerciseName").addEventListener("input", event => { const panel = document.querySelector("#planExerciseResults"); panel.classList.remove("hidden"); renderExerciseBrowser(panel, dedupeExerciseNames([...favourites, ...exercises, ...plans.flatMap(plan => normalizePlanExercises(plan.exercises).map(item => item.exercise))]), event.target.value, "plan"); });
 document.querySelector("#duplicateCancel").addEventListener("click", () => resolveDuplicatePlan("cancel")); document.querySelector("#duplicateCreate").addEventListener("click", () => resolveDuplicatePlan("create")); document.querySelector("#duplicateUpdate").addEventListener("click", () => resolveDuplicatePlan("update"));
-document.querySelector("#signUp").addEventListener("click", signUp); document.querySelector("#signIn").addEventListener("click", signIn); document.querySelector("#signOut").addEventListener("click", event => { event.stopPropagation(); signOut(); });
+document.querySelector("#signOut").addEventListener("click", event => { event.stopPropagation(); signOut(); });
 document.querySelector("#accountButton").addEventListener("click", openAccountPanel); document.querySelector("#sidebarAccountButton").addEventListener("click", openAccountPanel); document.querySelector("#closeAccount").addEventListener("click", closeAccountPanel); document.querySelector("#closeAccountBackdrop").addEventListener("click", closeAccountPanel);
 document.querySelector("#closePrModal").addEventListener("click", closePersonalRecords);
 document.querySelector("#prModal").addEventListener("click", event => { if (event.target.id === "prModal") closePersonalRecords(); });
 document.querySelectorAll("[data-view-link]").forEach(link => link.addEventListener("click", event => { event.preventDefault(); showView(link.dataset.viewLink); }));
-document.addEventListener("keydown", event => { if (event.key === "Escape") { closeConfirmation(); closeDuplicatePlanModal(); closeAccountPanel(); } if (event.key === "Enter" && !document.querySelector("#authGate").classList.contains("hidden") && ["authEmail", "authPassword"].includes(event.target.id)) signIn(); else if (event.key === "Enter" && document.querySelector("#workoutView").classList.contains("active") && ["weightInput", "repsInput"].includes(event.target.id)) addSet(); });
+document.addEventListener("keydown", event => { if (event.key === "Escape") { closeConfirmation(); closeDuplicatePlanModal(); closeAccountPanel(); } if (event.key === "Enter" && document.querySelector("#workoutView").classList.contains("active") && ["weightInput", "repsInput"].includes(event.target.id)) addSet(); });
 
 function renderPersonalRecords() {
   const records = Object.entries(bestEstimated1RMs(workoutHistory.flatMap(workout => workout.sets))).sort((a, b) => b[1] - a[1]);
